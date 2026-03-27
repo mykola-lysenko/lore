@@ -41,15 +41,24 @@ fi
 # Helper: returns 0 if the given python has pip and is not a known stub
 python_is_usable() {
     local py="$1"
-    [ -x "$py" ] || return 1
-    # Skip known stubs
-    case "$py" in
-        /usr/bin/python3) return 1 ;;
-        *fbcode*) return 1 ;;
-        *Xcode*) return 1 ;;
+    if [ ! -x "$py" ]; then
+        echo "  [skip] $py — not found or not executable"
+        return 1
+    fi
+    # Resolve symlinks to check the real path for stub patterns
+    local real_py
+    real_py="$(readlink -f "$py" 2>/dev/null || realpath "$py" 2>/dev/null || echo "$py")"
+    case "$real_py" in
+        /usr/bin/python3) echo "  [skip] $py → $real_py — macOS system stub"; return 1 ;;
+        *fbcode*)         echo "  [skip] $py → $real_py — Meta/fbcode stub"; return 1 ;;
+        *Xcode*)          echo "  [skip] $py → $real_py — Xcode stub"; return 1 ;;
     esac
     # Must be able to run pip
-    "$py" -m pip --version >/dev/null 2>&1 || return 1
+    if ! "$py" -m pip --version >/dev/null 2>&1; then
+        echo "  [skip] $py → $real_py — no pip"
+        return 1
+    fi
+    echo "  [ok]   $py → $real_py"
     return 0
 }
 
