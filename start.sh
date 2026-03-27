@@ -10,17 +10,10 @@ cd "$SCRIPT_DIR"
 echo "=== Lore ==="
 echo ""
 
-# Check b4 is installed
-if ! command -v b4 &>/dev/null; then
-    echo "ERROR: b4 is not installed. Install it with:"
-    echo "  pip install b4"
-    exit 1
-fi
-
-# Check Python deps
-python3 -c "import fastapi, uvicorn, anthropic, openai" 2>/dev/null || {
+# Check Python deps (including b4)
+python3 -c "import b4, fastapi, uvicorn, anthropic, openai" 2>/dev/null || {
     echo "Installing Python dependencies..."
-    pip install fastapi uvicorn anthropic openai python-dotenv
+    pip install b4 fastapi uvicorn anthropic openai python-dotenv
 }
 
 # Start backend
