@@ -25,42 +25,77 @@ fi
 # ---------------------------------------------------------------------------
 # 2. Resolve the correct Python interpreter
 #
-# Priority order (highest → lowest):
+# We need a Python that:
+#   - is NOT the macOS system stub (/usr/bin/python3)
+#   - is NOT a Meta/fbcode stub (/usr/local/fbcode/...)
+#   - has pip available (can run: python -m pip --version)
+#
+# Priority order:
 #   a) pyenv shim  (~/.pyenv/shims/python3)
 #   b) Homebrew arm64 (/opt/homebrew/bin/python3)
-#   c) Homebrew x86  (/usr/local/bin/python3)
-#   d) pip3-sibling  (same bin dir as pip3)
-#   e) plain python3 (whatever is on PATH)
-#
-# We explicitly skip /usr/bin/python3 (macOS system Python / Xcode CLT)
-# because it is a stub that cannot install packages into user site-packages.
+#   c) pip3-sibling  (same bin dir as pip3)
+#   d) python3.11 / python3.10 / python3.9 on PATH
+#   e) plain python3 on PATH
 # ---------------------------------------------------------------------------
+
+# Helper: returns 0 if the given python has pip and is not a known stub
+python_is_usable() {
+    local py="$1"
+    [ -x "$py" ] || return 1
+    # Skip known stubs
+    case "$py" in
+        /usr/bin/python3) return 1 ;;
+        *fbcode*) return 1 ;;
+        *Xcode*) return 1 ;;
+    esac
+    # Must be able to run pip
+    "$py" -m pip --version >/dev/null 2>&1 || return 1
+    return 0
+}
+
 PYTHON=""
 
 for candidate in \
     "$HOME/.pyenv/shims/python3" \
     "/opt/homebrew/bin/python3" \
-    "/usr/local/bin/python3"; do
-    if [ -x "$candidate" ] && [ "$candidate" != "/usr/bin/python3" ]; then
+    "/opt/homebrew/bin/python3.12" \
+    "/opt/homebrew/bin/python3.11" \
+    "/opt/homebrew/bin/python3.10"; do
+    if python_is_usable "$candidate"; then
         PYTHON="$candidate"
         break
     fi
 done
 
+# Try pip3-sibling
 if [ -z "$PYTHON" ]; then
     PIP3_PATH="$(command -v pip3 2>/dev/null || echo "")"
     if [ -n "$PIP3_PATH" ]; then
         PIP3_BIN_DIR="$(dirname "$PIP3_PATH")"
-        if [ -x "$PIP3_BIN_DIR/python3" ] && [ "$PIP3_BIN_DIR/python3" != "/usr/bin/python3" ]; then
-            PYTHON="$PIP3_BIN_DIR/python3"
-        elif [ -x "$PIP3_BIN_DIR/python" ]; then
-            PYTHON="$PIP3_BIN_DIR/python"
-        fi
+        for candidate in "$PIP3_BIN_DIR/python3" "$PIP3_BIN_DIR/python"; do
+            if python_is_usable "$candidate"; then
+                PYTHON="$candidate"
+                break
+            fi
+        done
     fi
 fi
 
+# Try versioned python3.x on PATH
 if [ -z "$PYTHON" ]; then
-    PYTHON="python3"
+    for ver in python3.12 python3.11 python3.10 python3.9 python3; do
+        candidate="$(command -v $ver 2>/dev/null || echo "")"
+        if python_is_usable "$candidate"; then
+            PYTHON="$candidate"
+            break
+        fi
+    done
+fi
+
+if [ -z "$PYTHON" ]; then
+    echo "ERROR: Could not find a usable Python with pip."
+    echo "Please install Python via Homebrew: brew install python"
+    exit 1
 fi
 
 echo "Using Python: $PYTHON"
