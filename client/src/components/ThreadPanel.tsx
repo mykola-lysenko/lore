@@ -293,15 +293,17 @@ export function ThreadPanel({
         </div>
       </div>
 
-      {/* AI Summary section */}
+      {/* AI Summary section — capped height so it never pushes emails off screen */}
       {thread.summary && (
-        <div className="px-4 py-3 border-b border-border bg-blue-500/5 shrink-0">
-          <div className="flex items-center gap-1.5 mb-2">
-            <Sparkles className="w-3.5 h-3.5 text-blue-400" />
-            <span className="text-xs font-medium text-blue-400">AI Summary</span>
-          </div>
-          <div className="text-xs text-foreground/85 leading-relaxed prose prose-invert prose-xs max-w-none">
-            <Streamdown>{thread.summary}</Streamdown>
+        <div className="border-b border-border bg-blue-500/5 shrink-0 max-h-48 overflow-y-auto">
+          <div className="px-4 py-3">
+            <div className="flex items-center gap-1.5 mb-2">
+              <Sparkles className="w-3.5 h-3.5 text-blue-400" />
+              <span className="text-xs font-medium text-blue-400">AI Summary</span>
+            </div>
+            <div className="text-xs text-foreground/85 leading-relaxed prose prose-invert prose-xs max-w-none">
+              <Streamdown>{thread.summary}</Streamdown>
+            </div>
           </div>
         </div>
       )}
