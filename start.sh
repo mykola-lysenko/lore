@@ -10,15 +10,37 @@ cd "$SCRIPT_DIR"
 echo "=== Lore ==="
 echo ""
 
-# Check Python deps (including b4)
-python3 -c "import b4, fastapi, uvicorn, anthropic, openai" 2>/dev/null || {
+# On macOS the system `python3` (Xcode CLT, /usr/bin/python3) and a
+# user-installed `pip3` (Homebrew / pyenv) can point to different Python
+# installations, causing "No module named 'b4'" even after pip3 installs it.
+#
+# Strategy: derive the Python executable that owns pip3 so they always match.
+PIP3_PATH="$(command -v pip3 2>/dev/null || echo "")"
+if [ -n "$PIP3_PATH" ]; then
+    # pip3 lives in <prefix>/bin/pip3 → <prefix>/bin/python3
+    PIP3_BIN_DIR="$(dirname "$PIP3_PATH")"
+    if [ -x "$PIP3_BIN_DIR/python3" ]; then
+        PYTHON="$PIP3_BIN_DIR/python3"
+    elif [ -x "$PIP3_BIN_DIR/python" ]; then
+        PYTHON="$PIP3_BIN_DIR/python"
+    else
+        PYTHON="python3"
+    fi
+else
+    PYTHON="python3"
+fi
+
+echo "Using Python: $PYTHON"
+
+# Install deps using the matched Python's pip module
+"$PYTHON" -c "import b4, fastapi, uvicorn, anthropic, openai" 2>/dev/null || {
     echo "Installing Python dependencies..."
-    pip3 install b4 fastapi uvicorn anthropic openai python-dotenv
+    "$PYTHON" -m pip install b4 fastapi uvicorn anthropic openai python-dotenv
 }
 
 # Start backend
 echo "Starting backend (FastAPI on port 8765)..."
-python3 backend/main.py &
+"$PYTHON" backend/main.py &
 BACKEND_PID=$!
 echo "Backend PID: $BACKEND_PID"
 
