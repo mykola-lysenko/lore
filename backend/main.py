@@ -69,7 +69,7 @@ DEFAULT_CONFIG = {
     "lore_base_url": "https://lore.kernel.org",
     "days_back": 30,
     "b4_folder": None,  # None = use managed cache
-    "ai_provider": "claude",  # claude | openai | ollama | none
+    "ai_provider": "claude-cli",  # claude-cli | codex-cli | claude | openai | ollama | none
     "ai_model": "claude-opus-4-5",
     "ai_api_key": "",
     "ollama_url": "http://localhost:11434",
@@ -529,8 +529,9 @@ def summarize_with_codex_cli(prompt: str, cfg: dict) -> str:
             "Install OpenAI Codex CLI (https://github.com/openai/codex) and make sure it is on your PATH."
         )
     try:
+        # Use -- to pass the prompt as a positional argument, avoiding flag conflicts
         result = subprocess.run(
-            [binary, "-q", "--no-ansi", prompt],
+            [binary, "--", prompt],
             capture_output=True,
             text=True,
             timeout=120,
@@ -634,7 +635,7 @@ def list_threads(refresh: bool = False):
 
     if not refresh and cache_file.exists():
         age = time.time() - cache_file.stat().st_mtime
-        if age < 600:  # 10-minute cache
+        if age < 86400:  # 24-hour cache — avoids re-fetching on every restart
             with open(cache_file) as f:
                 threads = json.load(f)
             # Merge in any saved summaries and read state

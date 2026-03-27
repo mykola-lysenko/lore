@@ -41,13 +41,20 @@ function ThreadCard({
   const [summarizing, setSummarizing] = useState(false);
   const [summaryExpanded, setSummaryExpanded] = useState(false);
 
-  const handleSummarize = async (e: React.MouseEvent) => {
+  const handleSummarize = async (e: React.MouseEvent, force = false) => {
     e.stopPropagation();
     setSummarizing(true);
     setSummaryExpanded(true);
-    await onSummarize();
+    await onSummarize(force);
     setSummarizing(false);
   };
+
+  // A summary is considered an error if it starts with a known error prefix
+  const isSummaryError = thread.summary
+    ? /^(No API key|claude CLI|codex CLI|Summary generation failed|Ollama error|AI summarization is disabled)/i.test(
+        thread.summary
+      )
+    : false;
 
   const initials = getInitials(thread.author);
   const avatarColor = stringToColor(thread.author_email);
@@ -139,11 +146,17 @@ function ThreadCard({
       </div>
 
       {/* Summary section */}
-      {thread.summary ? (
+      {thread.summary && !isSummaryError ? (
         <div className="mt-2 ml-9">
           {summaryExpanded || thread.summary.length < 200 ? (
             <div className="text-xs text-muted-foreground leading-relaxed prose prose-invert prose-xs max-w-none">
               <Streamdown>{thread.summary.slice(0, 600)}</Streamdown>
+              <button
+                className="mt-1 text-[10px] text-muted-foreground/50 hover:text-blue-400 transition-colors"
+                onClick={(e) => handleSummarize(e, true)}
+              >
+                {summarizing ? "Regenerating..." : "↺ Regenerate"}
+              </button>
             </div>
           ) : (
             <button
@@ -158,21 +171,26 @@ function ThreadCard({
           )}
         </div>
       ) : (
-        <div className="mt-2 ml-9 opacity-0 group-hover:opacity-100 transition-opacity">
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-6 text-[11px] text-muted-foreground hover:text-blue-400 px-2 gap-1"
-            onClick={handleSummarize}
-            disabled={summarizing}
-          >
-            {summarizing ? (
-              <Loader2 className="w-3 h-3 animate-spin" />
-            ) : (
-              <Sparkles className="w-3 h-3" />
-            )}
-            {summarizing ? "Summarizing..." : "AI Summary"}
-          </Button>
+        <div className="mt-2 ml-9">
+          {isSummaryError && (
+            <p className="text-[11px] text-red-400/80 mb-1 line-clamp-2">{thread.summary}</p>
+          )}
+          <div className={cn(!isSummaryError && "opacity-0 group-hover:opacity-100 transition-opacity")}>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-6 text-[11px] text-muted-foreground hover:text-blue-400 px-2 gap-1"
+              onClick={(e) => handleSummarize(e, isSummaryError)}
+              disabled={summarizing}
+            >
+              {summarizing ? (
+                <Loader2 className="w-3 h-3 animate-spin" />
+              ) : (
+                <Sparkles className="w-3 h-3" />
+              )}
+              {summarizing ? "Summarizing..." : isSummaryError ? "Retry Summary" : "AI Summary"}
+            </Button>
+          </div>
         </div>
       )}
     </div>
