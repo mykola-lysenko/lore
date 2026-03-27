@@ -493,6 +493,58 @@ def summarize_with_ollama(prompt: str, cfg: dict) -> str:
         return f"Ollama error: {e}"
 
 
+def summarize_with_claude_cli(prompt: str, cfg: dict) -> str:
+    """Generate summary using the local `claude` CLI (Claude Code) — no API key needed."""
+    import shutil
+    binary = shutil.which("claude")
+    if not binary:
+        return (
+            "'claude' CLI not found in PATH. "
+            "Install Claude Code (https://claude.ai/code) and make sure it is on your PATH."
+        )
+    try:
+        result = subprocess.run(
+            [binary, "-p", prompt],
+            capture_output=True,
+            text=True,
+            timeout=120,
+        )
+        if result.returncode != 0:
+            stderr = result.stderr.strip()
+            return f"claude CLI error (exit {result.returncode}): {stderr or 'no output'}"
+        return result.stdout.strip()
+    except subprocess.TimeoutExpired:
+        return "claude CLI timed out after 120 seconds."
+    except Exception as e:
+        return f"claude CLI failed: {e}"
+
+
+def summarize_with_codex_cli(prompt: str, cfg: dict) -> str:
+    """Generate summary using the local `codex` CLI (OpenAI Codex CLI) — no API key needed."""
+    import shutil
+    binary = shutil.which("codex")
+    if not binary:
+        return (
+            "'codex' CLI not found in PATH. "
+            "Install OpenAI Codex CLI (https://github.com/openai/codex) and make sure it is on your PATH."
+        )
+    try:
+        result = subprocess.run(
+            [binary, "-q", "--no-ansi", prompt],
+            capture_output=True,
+            text=True,
+            timeout=120,
+        )
+        if result.returncode != 0:
+            stderr = result.stderr.strip()
+            return f"codex CLI error (exit {result.returncode}): {stderr or 'no output'}"
+        return result.stdout.strip()
+    except subprocess.TimeoutExpired:
+        return "codex CLI timed out after 120 seconds."
+    except Exception as e:
+        return f"codex CLI failed: {e}"
+
+
 def generate_summary(thread: dict, cfg: dict) -> str:
     """Generate an AI summary for a thread using the configured provider."""
     provider = cfg.get("ai_provider", "claude")
@@ -505,6 +557,10 @@ def generate_summary(thread: dict, cfg: dict) -> str:
             return summarize_with_openai(prompt, cfg)
         elif provider == "ollama":
             return summarize_with_ollama(prompt, cfg)
+        elif provider == "claude-cli":
+            return summarize_with_claude_cli(prompt, cfg)
+        elif provider == "codex-cli":
+            return summarize_with_codex_cli(prompt, cfg)
         else:
             return "AI summarization is disabled. Enable a provider in Settings."
     except Exception as e:

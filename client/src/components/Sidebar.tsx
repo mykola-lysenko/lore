@@ -61,11 +61,15 @@ const FILTER_TYPES = [
 ];
 
 const AI_PROVIDERS = [
-  { value: "claude", label: "Claude (Anthropic)" },
-  { value: "openai", label: "OpenAI GPT" },
+  { value: "claude-cli", label: "Claude Code (CLI, no key)" },
+  { value: "codex-cli", label: "Codex CLI (no key)" },
+  { value: "claude", label: "Claude API (Anthropic)" },
+  { value: "openai", label: "OpenAI API" },
   { value: "ollama", label: "Ollama (local)" },
   { value: "none", label: "Disabled" },
 ];
+
+const CLI_PROVIDERS = ["claude-cli", "codex-cli"];
 
 const CLAUDE_MODELS = [
   { value: "claude-opus-4-5", label: "Claude Opus 4.5" },
@@ -345,6 +349,17 @@ export function Sidebar({
                     </SelectContent>
                   </Select>
                 </div>
+
+                {/* CLI provider info note */}
+                {CLI_PROVIDERS.includes(currentProvider) && (
+                  <div className="rounded border border-blue-500/30 bg-blue-500/10 px-2.5 py-2 text-[11px] text-blue-300 space-y-0.5">
+                    <p className="font-medium">No API key required</p>
+                    <p className="text-blue-300/70">
+                      Uses the <code className="font-mono">{currentProvider === "claude-cli" ? "claude" : "codex"}</code> binary
+                      already on your PATH. Make sure it is authenticated before summarizing.
+                    </p>
+                  </div>
+                )}
 
                 {/* AI Model */}
                 {(currentProvider === "claude" || currentProvider === "openai") && (

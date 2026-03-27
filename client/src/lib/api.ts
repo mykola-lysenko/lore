@@ -47,7 +47,7 @@ export interface Config {
   lore_base_url: string;
   days_back: number;
   b4_folder: string | null;
-  ai_provider: "claude" | "openai" | "ollama" | "none";
+  ai_provider: "claude" | "openai" | "ollama" | "claude-cli" | "codex-cli" | "none";
   ai_model: string;
   ai_api_key: string;
   ollama_url: string;
