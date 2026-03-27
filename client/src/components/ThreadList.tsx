@@ -52,6 +52,8 @@ function ThreadCard({
   const initials = getInitials(thread.author);
   const avatarColor = stringToColor(thread.author_email);
 
+  const isUnread = !thread.is_read;
+
   return (
     <div
       className={cn(
@@ -65,14 +67,19 @@ function ThreadCard({
     >
       {/* Top row: avatar + subject + date */}
       <div className="flex items-start gap-2.5">
-        {/* Avatar */}
-        <div
-          className={cn(
-            "w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold text-white shrink-0 mt-0.5",
-            avatarColor
+        {/* Avatar with unread dot */}
+        <div className="relative shrink-0 mt-0.5">
+          <div
+            className={cn(
+              "w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold text-white",
+              avatarColor
+            )}
+          >
+            {initials}
+          </div>
+          {isUnread && (
+            <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-blue-400 border-2 border-background" />
           )}
-        >
-          {initials}
         </div>
 
         {/* Subject + meta */}
@@ -80,7 +87,8 @@ function ThreadCard({
           <div className="flex items-start justify-between gap-2">
             <h3
               className={cn(
-                "text-sm font-medium leading-snug line-clamp-2",
+                "text-sm leading-snug line-clamp-2",
+                isUnread ? "font-semibold text-foreground" : "font-medium",
                 selected ? "text-foreground" : "text-foreground/90"
               )}
             >

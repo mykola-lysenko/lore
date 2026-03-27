@@ -18,6 +18,7 @@ export interface ThreadSummary {
   lore_url: string;
   has_full_thread: boolean;
   summary: string | null;
+  is_read: boolean;
 }
 
 export interface EmailMessage {
@@ -100,4 +101,13 @@ export const api = {
 
   knownLists: () =>
     request<{ lists: KnownList[] }>("/api/lists"),
+
+  markRead: (threadIds: string[]) =>
+    request<{ status: string; read_count: number }>("/api/read-state", {
+      method: "POST",
+      body: JSON.stringify({ thread_ids: threadIds }),
+    }),
+
+  markAllUnread: () =>
+    request<{ status: string }>("/api/read-state", { method: "DELETE" }),
 };

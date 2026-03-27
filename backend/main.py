@@ -54,6 +54,7 @@ CACHE_DIR = DATA_DIR / "cache"
 THREADS_DIR = DATA_DIR / "threads"
 CONFIG_FILE = DATA_DIR / "config.json"
 SUMMARIES_FILE = DATA_DIR / "summaries.json"
+READ_STATE_FILE = DATA_DIR / "read-state.json"
 
 for d in [DATA_DIR, CACHE_DIR, THREADS_DIR]:
     d.mkdir(parents=True, exist_ok=True)
@@ -105,6 +106,21 @@ def load_summaries() -> dict:
 def save_summaries(summaries: dict) -> None:
     with open(SUMMARIES_FILE, "w") as f:
         json.dump(summaries, f, indent=2)
+
+
+def load_read_state() -> set:
+    if READ_STATE_FILE.exists():
+        try:
+            with open(READ_STATE_FILE) as f:
+                return set(json.load(f))
+        except Exception:
+            pass
+    return set()
+
+
+def save_read_state(read_ids: set) -> None:
+    with open(READ_STATE_FILE, "w") as f:
+        json.dump(sorted(read_ids), f, indent=2)
 
 
 # ---------------------------------------------------------------------------
@@ -516,6 +532,10 @@ class SummarizeRequest(BaseModel):
     force: bool = False
 
 
+class MarkReadRequest(BaseModel):
+    thread_ids: list[str]
+
+
 # ---------------------------------------------------------------------------
 # API Routes
 # ---------------------------------------------------------------------------
@@ -561,21 +581,25 @@ def list_threads(refresh: bool = False):
         if age < 600:  # 10-minute cache
             with open(cache_file) as f:
                 threads = json.load(f)
-            # Merge in any saved summaries
+            # Merge in any saved summaries and read state
             summaries = load_summaries()
+            read_ids = load_read_state()
             for t in threads:
                 if t["id"] in summaries:
                     t["summary"] = summaries[t["id"]]
+                t["is_read"] = t["id"] in read_ids
             return {"threads": threads, "cached": True, "count": len(threads)}
 
     threads = fetch_thread_list(cfg)
 
-    # Merge in saved summaries
+    # Merge in saved summaries and read state
     summaries = load_summaries()
+    read_ids = load_read_state()
     for t in threads:
         if t["id"] in summaries:
             t["summary"] = summaries[t["id"]]
             t["has_full_thread"] = True
+        t["is_read"] = t["id"] in read_ids
 
     # Cache the results
     with open(cache_file, "w") as f:
@@ -624,6 +648,28 @@ def summarize_thread(req: SummarizeRequest):
     save_summaries(summaries)
 
     return {"summary": summary, "cached": False}
+
+
+@app.get("/api/read-state")
+def get_read_state():
+    """Return the set of read thread IDs."""
+    return {"read_ids": sorted(load_read_state())}
+
+
+@app.post("/api/read-state")
+def mark_read(req: MarkReadRequest):
+    """Mark one or more threads as read."""
+    read_ids = load_read_state()
+    read_ids.update(req.thread_ids)
+    save_read_state(read_ids)
+    return {"status": "ok", "read_count": len(read_ids)}
+
+
+@app.delete("/api/read-state")
+def mark_all_unread():
+    """Reset all read state (mark everything as unread)."""
+    save_read_state(set())
+    return {"status": "cleared"}
 
 
 @app.delete("/api/cache")

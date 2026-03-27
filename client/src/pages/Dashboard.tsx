@@ -82,7 +82,11 @@ export default function Dashboard() {
     try {
       const thread = await api.getThread(summary.id);
       setSelectedThread(thread);
-      // Update the summary in the list with full message count
+      // Mark thread as read
+      if (!summary.is_read) {
+        api.markRead([summary.id]).catch(() => {});
+      }
+      // Update the summary in the list with full message count + read state
       setThreads((prev) =>
         prev.map((t) =>
           t.id === summary.id
@@ -91,6 +95,7 @@ export default function Dashboard() {
                 message_count: thread.message_count,
                 participant_count: thread.participant_count,
                 has_full_thread: true,
+                is_read: true,
               }
             : t
         )
@@ -145,6 +150,18 @@ export default function Dashboard() {
     setSelectedThread(null);
   }, []);
 
+  const handleMarkAllRead = useCallback(async () => {
+    const unreadIds = threads.filter((t) => !t.is_read).map((t) => t.id);
+    if (unreadIds.length === 0) return;
+    try {
+      await api.markRead(unreadIds);
+      setThreads((prev) => prev.map((t) => ({ ...t, is_read: true })));
+      toast.success(`Marked ${unreadIds.length} threads as read`);
+    } catch (err: any) {
+      toast.error(`Failed to mark as read: ${err.message}`);
+    }
+  }, [threads]);
+
   return (
     <div className="flex h-screen overflow-hidden bg-background text-foreground">
       {/* Left Sidebar */}
@@ -164,8 +181,10 @@ export default function Dashboard() {
           discussion: threads.filter((t) => t.type === "discussion").length,
           pull: threads.filter((t) => t.type === "pull").length,
         }}
+        unreadCount={threads.filter((t) => !t.is_read).length}
         backendOnline={backendOnline}
         onRefresh={() => loadThreads(true)}
+        onMarkAllRead={handleMarkAllRead}
         loading={loadingThreads}
       />
 

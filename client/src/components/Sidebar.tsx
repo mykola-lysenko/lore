@@ -45,8 +45,10 @@ interface SidebarProps {
   searchQuery: string;
   onSearchQuery: (q: string) => void;
   threadCounts: Record<string, number>;
+  unreadCount: number;
   backendOnline: boolean;
   onRefresh: () => void;
+  onMarkAllRead: () => void;
   loading: boolean;
 }
 
@@ -89,8 +91,10 @@ export function Sidebar({
   searchQuery,
   onSearchQuery,
   threadCounts,
+  unreadCount,
   backendOnline,
   onRefresh,
+  onMarkAllRead,
   loading,
 }: SidebarProps) {
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -227,8 +231,8 @@ export function Sidebar({
             </div>
           </div>
 
-          {/* Refresh */}
-          <div className="px-3 py-2 border-b border-border">
+          {/* Refresh + Mark all read */}
+          <div className="px-3 py-2 border-b border-border space-y-1.5">
             <Button
               variant="outline"
               size="sm"
@@ -241,6 +245,18 @@ export function Sidebar({
               />
               {loading ? "Fetching..." : "Refresh Threads"}
             </Button>
+            {unreadCount > 0 && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="w-full h-7 text-xs gap-1.5 text-muted-foreground hover:text-foreground"
+                onClick={onMarkAllRead}
+                disabled={!backendOnline}
+              >
+                <span className="w-2 h-2 rounded-full bg-blue-400 shrink-0" />
+                Mark all read ({unreadCount})
+              </Button>
+            )}
           </div>
 
           {/* Settings */}
