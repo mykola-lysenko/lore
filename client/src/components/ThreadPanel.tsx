@@ -3,7 +3,7 @@
  * Design: Full-width email reader with monospace body, thread navigation
  */
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { type Thread, type EmailMessage } from "@/lib/api";
 import {
   cn,
@@ -36,6 +36,8 @@ interface ThreadPanelProps {
   loading: boolean;
   onClose: () => void;
   onSummarize: (threadId: string, force?: boolean) => Promise<string | null>;
+  initialEmailIndex?: number | null;
+  onEmailIndexConsumed?: () => void;
 }
 
 function renderEmailLine(line: string, idx: number) {
@@ -162,10 +164,22 @@ export function ThreadPanel({
   loading,
   onClose,
   onSummarize,
+  initialEmailIndex,
+  onEmailIndexConsumed,
 }: ThreadPanelProps) {
   const [currentEmailIndex, setCurrentEmailIndex] = useState(0);
   const [viewMode, setViewMode] = useState<"all" | "single">("all");
   const [summarizing, setSummarizing] = useState(false);
+
+  // When the outline in the middle pane is clicked, jump to that email in single mode
+  useEffect(() => {
+    if (initialEmailIndex != null) {
+      setCurrentEmailIndex(initialEmailIndex);
+      setViewMode("single");
+      onEmailIndexConsumed?.();
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialEmailIndex]);
 
   const emails = thread.emails || [];
   const currentEmail = emails[currentEmailIndex];

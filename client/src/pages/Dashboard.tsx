@@ -32,6 +32,7 @@ export default function Dashboard() {
   const [filterType, setFilterType] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [queueState, setQueueState] = useState<QueueState | null>(null);
+  const [selectedEmailIndex, setSelectedEmailIndex] = useState<number | null>(null);
 
   // Track which thread IDs have already been enqueued this session
   const enqueuedRef = useRef<Set<string>>(new Set());
@@ -297,9 +298,14 @@ export default function Dashboard() {
         <ThreadList
           threads={filteredThreads}
           selectedId={selectedThread?.id}
+          selectedThread={selectedThread}
           loading={loadingThreads}
           onSelect={handleSelectThread}
           onSummarize={handleSummarize}
+          onEmailSelect={(emailIndex) => {
+            // Signal the panel to switch to single mode at this email index
+            setSelectedEmailIndex(emailIndex);
+          }}
           backendOnline={backendOnline}
         />
 
@@ -310,6 +316,8 @@ export default function Dashboard() {
             loading={loadingThread}
             onClose={handleCloseThread}
             onSummarize={handleSummarize}
+            initialEmailIndex={selectedEmailIndex}
+            onEmailIndexConsumed={() => setSelectedEmailIndex(null)}
           />
         )}
       </div>
