@@ -177,7 +177,7 @@ export function ThreadPanel({
   };
 
   return (
-    <div className="flex-1 flex flex-col overflow-hidden min-w-0">
+    <div className="flex-1 flex flex-col min-h-0 min-w-0">
       {/* Panel header */}
       <div className="px-4 py-3 border-b border-border bg-card/50 shrink-0">
         <div className="flex items-start justify-between gap-3">
