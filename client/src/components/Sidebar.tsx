@@ -5,10 +5,12 @@
 
 import { useState } from "react";
 import { type Config } from "@/lib/api";
+import { type QueueState } from "@/pages/Dashboard";
 import { cn, getThreadTypeBadgeClass } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Progress } from "@/components/ui/progress";
 import {
   Select,
   SelectContent,
@@ -50,6 +52,8 @@ interface SidebarProps {
   onRefresh: () => void;
   onMarkAllRead: () => void;
   loading: boolean;
+  queueState: QueueState | null;
+  onCancelQueue: () => void;
 }
 
 const FILTER_TYPES = [
@@ -100,6 +104,8 @@ export function Sidebar({
   onRefresh,
   onMarkAllRead,
   loading,
+  queueState,
+  onCancelQueue,
 }: SidebarProps) {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [localConfig, setLocalConfig] = useState<Partial<Config>>({});
@@ -260,6 +266,41 @@ export function Sidebar({
                 <span className="w-2 h-2 rounded-full bg-blue-400 shrink-0" />
                 Mark all read ({unreadCount})
               </Button>
+            )}
+            {/* Background summarization queue indicator */}
+            {queueState && (queueState.worker_running || queueState.pending > 0) && (
+              <div className="space-y-1">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] text-muted-foreground">
+                    {queueState.in_progress
+                      ? "Summarizing…"
+                      : `${queueState.pending} left to summarize`}
+                  </span>
+                  <button
+                    onClick={onCancelQueue}
+                    className="text-[10px] text-muted-foreground hover:text-destructive transition-colors"
+                  >
+                    Cancel
+                  </button>
+                </div>
+                <Progress
+                  value={
+                    queueState.completed + queueState.failed > 0
+                      ? Math.round(
+                          (queueState.completed /
+                            (queueState.completed + queueState.failed + queueState.pending +
+                              (queueState.in_progress ? 1 : 0))) *
+                            100
+                        )
+                      : 0
+                  }
+                  className="h-1"
+                />
+                <div className="text-[10px] text-muted-foreground/60">
+                  {queueState.completed} done
+                  {queueState.failed > 0 && ` · ${queueState.failed} failed`}
+                </div>
+              </div>
             )}
           </div>
 

@@ -110,4 +110,25 @@ export const api = {
 
   markAllUnread: () =>
     request<{ status: string }>("/api/read-state", { method: "DELETE" }),
+
+  // Background summarization queue
+  enqueueForSummary: (threadIds: string[]) =>
+    request<{ queued: number; total_pending: number }>("/api/queue/enqueue", {
+      method: "POST",
+      body: JSON.stringify({ thread_ids: threadIds }),
+    }),
+
+  getQueueStatus: () =>
+    request<{
+      pending: number;
+      in_progress: string | null;
+      completed: number;
+      failed: number;
+      worker_running: boolean;
+      last_completed: string | null;
+      last_failed: string | null;
+    }>("/api/queue/status"),
+
+  clearQueue: () =>
+    request<{ cleared: number }>("/api/queue/clear", { method: "DELETE" }),
 };
