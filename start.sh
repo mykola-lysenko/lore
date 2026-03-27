@@ -13,7 +13,7 @@ echo ""
 # Check Python deps (including b4)
 python3 -c "import b4, fastapi, uvicorn, anthropic, openai" 2>/dev/null || {
     echo "Installing Python dependencies..."
-    pip install b4 fastapi uvicorn anthropic openai python-dotenv
+    pip3 install b4 fastapi uvicorn anthropic openai python-dotenv
 }
 
 # Start backend
