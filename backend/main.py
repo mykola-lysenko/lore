@@ -612,6 +612,78 @@ class MarkReadRequest(BaseModel):
     thread_ids: list[str]
 
 
+class EnqueueRequest(BaseModel):
+    thread_ids: list[str]  # ordered list of thread IDs to summarize
+
+
+# ---------------------------------------------------------------------------
+# Background summarization queue
+# ---------------------------------------------------------------------------
+
+# In-memory queue state (reset on restart, which is fine — frontend re-enqueues)
+_queue: list[str] = []          # pending thread IDs in order
+_queue_lock = asyncio.Lock()
+_in_progress: Optional[str] = None  # currently summarizing thread ID
+_completed: list[str] = []      # successfully summarized this session
+_failed: list[str] = []         # failed this session
+_worker_running = False
+
+ERROR_PREFIXES = (
+    "No API key", "claude CLI", "codex CLI",
+    "Summary generation failed", "Ollama error",
+    "AI summarization is disabled",
+)
+
+
+async def _summarize_worker():
+    """Background worker that drains the queue one thread at a time."""
+    global _in_progress, _worker_running
+    _worker_running = True
+    try:
+        while True:
+            async with _queue_lock:
+                if not _queue:
+                    _worker_running = False
+                    return
+                thread_id = _queue.pop(0)
+
+            _in_progress = thread_id
+            try:
+                cfg = load_config()
+                summaries = load_summaries()
+                cached = summaries.get(thread_id, "")
+                is_error = any(cached.startswith(p) for p in ERROR_PREFIXES)
+                # Skip if already has a good summary
+                if cached and not is_error:
+                    _completed.append(thread_id)
+                    _in_progress = None
+                    continue
+
+                # Run summarization in a thread pool so it doesn't block the event loop
+                loop = asyncio.get_event_loop()
+                thread_data = await loop.run_in_executor(
+                    None, fetch_full_thread, thread_id, cfg
+                )
+                summary = await loop.run_in_executor(
+                    None, generate_summary, thread_data, cfg
+                )
+                summaries[thread_id] = summary
+                save_summaries(summaries)
+                if any(summary.startswith(p) for p in ERROR_PREFIXES):
+                    _failed.append(thread_id)
+                else:
+                    _completed.append(thread_id)
+            except Exception as e:
+                _failed.append(thread_id)
+            finally:
+                _in_progress = None
+
+            # Small delay between requests to avoid hammering the AI provider
+            await asyncio.sleep(1)
+    finally:
+        _worker_running = False
+
+
 # ---------------------------------------------------------------------------
 # API Routes
 # ---------------------------------------------------------------------------
@@ -732,6 +804,50 @@ def summarize_thread(req: SummarizeRequest):
     save_summaries(summaries)
 
     return {"summary": summary, "cached": False}
+
+
+@app.post("/api/queue/enqueue")
+async def enqueue_summaries(req: EnqueueRequest, background_tasks: BackgroundTasks):
+    """
+    Add thread IDs to the background summarization queue.
+    Skips IDs already in the queue or currently in progress.
+    Starts the worker if it is not already running.
+    """
+    global _worker_running
+    async with _queue_lock:
+        existing = set(_queue) | ({_in_progress} if _in_progress else set())
+        new_ids = [tid for tid in req.thread_ids if tid not in existing]
+        _queue.extend(new_ids)
+
+    if not _worker_running and _queue:
+        background_tasks.add_task(_summarize_worker)
+
+    return {"queued": len(new_ids), "total_pending": len(_queue)}
+
+
+@app.get("/api/queue/status")
+def queue_status():
+    """Return current queue state for the frontend progress indicator."""
+    summaries = load_summaries()
+    return {
+        "pending": len(_queue),
+        "in_progress": _in_progress,
+        "completed": len(_completed),
+        "failed": len(_failed),
+        "worker_running": _worker_running,
+        # Return the latest completed thread ID so the frontend can refresh it
+        "last_completed": _completed[-1] if _completed else None,
+        "last_failed": _failed[-1] if _failed else None,
+    }
+
+
+@app.delete("/api/queue/clear")
+async def clear_queue():
+    """Cancel all pending items in the queue (does not stop in-progress item)."""
+    async with _queue_lock:
+        count = len(_queue)
+        _queue.clear()
+    return {"cleared": count}
 
 
 @app.get("/api/read-state")
