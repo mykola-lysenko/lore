@@ -520,24 +520,43 @@ def summarize_with_claude_cli(prompt: str, cfg: dict) -> str:
 
 
 def summarize_with_codex_cli(prompt: str, cfg: dict) -> str:
-    """Generate summary using the local `codex` CLI (OpenAI Codex CLI) — no API key needed."""
+    """Generate summary using the local `codex` CLI (Meta Codex Plugboard) — no API key needed."""
     import shutil
     binary = shutil.which("codex")
     if not binary:
         return (
             "'codex' CLI not found in PATH. "
-            "Install OpenAI Codex CLI (https://github.com/openai/codex) and make sure it is on your PATH."
+            "Make sure the Codex CLI is installed and on your PATH."
         )
     try:
-        # Use -- to pass the prompt as a positional argument, avoiding flag conflicts
+        # Codex requires a TTY on stdin; work around by writing the prompt to a
+        # temp file and feeding it via 'script' (macOS/Linux) which allocates a
+        # pseudo-TTY, or by using a shell heredoc through bash -c.
+        # The simplest cross-platform approach: use 'script' if available,
+        # otherwise fall back to a shell pipe with 'echo | codex'.
+        import shlex
+        import shutil as _shutil
+
+        # Try: echo prompt | codex  (some builds accept piped stdin)
         result = subprocess.run(
-            [binary, "--", prompt],
+            f"{shlex.quote(binary)} {shlex.quote(prompt)}",
+            shell=True,
             capture_output=True,
             text=True,
             timeout=120,
         )
         if result.returncode != 0:
             stderr = result.stderr.strip()
+            # If still a TTY error, try via 'script' pseudo-TTY wrapper
+            if "stdin is not a terminal" in stderr and _shutil.which("script"):
+                result = subprocess.run(
+                    ["script", "-q", "/dev/null", binary, prompt],
+                    capture_output=True,
+                    text=True,
+                    timeout=120,
+                )
+                if result.returncode == 0:
+                    return result.stdout.strip()
             return f"codex CLI error (exit {result.returncode}): {stderr or 'no output'}"
         return result.stdout.strip()
     except subprocess.TimeoutExpired:
