@@ -703,6 +703,22 @@ def get_config():
     return safe
 
 
+# Error summary patterns — these are stale and should be cleared when provider changes
+_SUMMARY_ERROR_PATTERNS = [
+    r"^No API key",
+    r"^claude CLI",
+    r"^codex CLI",
+    r"^Summary generation failed",
+    r"^Ollama error",
+    r"^AI summarization is disabled",
+    r"^Could not find",
+]
+
+
+def _is_error_summary(text: str) -> bool:
+    return any(re.match(p, text, re.IGNORECASE) for p in _SUMMARY_ERROR_PATTERNS)
+
+
 @app.put("/api/config")
 def update_config(update: ConfigUpdate):
     cfg = load_config()
@@ -710,8 +726,18 @@ def update_config(update: ConfigUpdate):
     # Don't overwrite key with masked value
     if data.get("ai_api_key", "").startswith("***"):
         data.pop("ai_api_key")
+
+    ai_changed = "ai_provider" in data or "ai_api_key" in data or "ai_model" in data
     cfg.update(data)
     save_config(cfg)
+
+    # If AI settings changed, purge all cached error summaries so they get retried
+    if ai_changed:
+        summaries = load_summaries()
+        cleaned = {k: v for k, v in summaries.items() if not _is_error_summary(v)}
+        if len(cleaned) != len(summaries):
+            save_summaries(cleaned)
+
     return {"status": "saved"}
 
 
