@@ -246,7 +246,7 @@ export function ThreadList({
   }
 
   return (
-    <div className="flex-1 flex flex-col overflow-hidden min-w-[340px] max-w-[520px] border-r border-border">
+    <div className="flex-1 flex flex-col overflow-hidden border-r border-border">
       {/* List header */}
       <div className="px-4 py-2 border-b border-border bg-card/50 flex items-center justify-between shrink-0">
         <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
