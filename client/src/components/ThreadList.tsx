@@ -149,8 +149,11 @@ function ThreadCard({
       {thread.summary && !isSummaryError ? (
         <div className="mt-2 ml-9">
           {summaryExpanded || thread.summary.length < 200 ? (
-            <div className="text-xs text-muted-foreground leading-relaxed prose prose-invert prose-xs max-w-none">
-              <Streamdown>{thread.summary.slice(0, 600)}</Streamdown>
+            <div
+              className="max-h-48 overflow-y-auto pr-1 text-xs text-muted-foreground leading-relaxed prose prose-invert prose-xs max-w-none"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <Streamdown>{thread.summary}</Streamdown>
               <button
                 className="mt-1 text-[10px] text-muted-foreground/50 hover:text-blue-400 transition-colors"
                 onClick={(e) => handleSummarize(e, true)}
