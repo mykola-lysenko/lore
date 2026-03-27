@@ -1,5 +1,5 @@
 /*
- * BPF Mailing List Dashboard — Main Dashboard Page
+ * Lore — Main Dashboard Page
  * Design: Dark Technical Dashboard (IDE-inspired)
  * Layout: Left sidebar (settings/filters) + Main thread list + Right panel (email reader)
  */

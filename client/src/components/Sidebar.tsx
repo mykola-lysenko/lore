@@ -1,5 +1,5 @@
 /*
- * BPF Mail Dashboard — Sidebar Component
+ * Lore — Sidebar Component
  * Design: Dark IDE-inspired sidebar with settings, filters, and navigation
  */
 
@@ -136,7 +136,7 @@ export function Sidebar({
               <Layers className="w-3.5 h-3.5 text-white" />
             </div>
             <span className="text-sm font-semibold text-foreground truncate">
-              BPF Mail
+              Lore
             </span>
           </div>
         )}

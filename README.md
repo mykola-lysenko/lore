@@ -1,4 +1,4 @@
-# BPF Mailing List Dashboard
+# Lore — Mailing List Dashboard
 
 A local web dashboard for reading kernel mailing list threads (BPF by default) using the [b4](https://github.com/mricon/b4) utility, with AI-generated thread summaries.
 
@@ -77,7 +77,7 @@ All settings are accessible from the **Settings** panel in the left sidebar:
 
 ## Data Storage
 
-The app stores data in `~/.local/share/bpf-mail-dashboard/`:
+The app stores data in `~/.local/share/lore-mail-dashboard/`:
 
 - `cache/` — thread list cache (10-minute TTL)
 - `threads/` — downloaded mbox files (per-thread, on demand)

@@ -1,5 +1,5 @@
 /*
- * BPF Mailing List Dashboard — App Router
+ * Lore — App Router
  * Design: Dark Technical Dashboard (IDE-inspired)
  * Dark theme by default, persistent sidebar layout.
  */

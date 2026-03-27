@@ -1,5 +1,5 @@
 """
-BPF Mailing List Dashboard — FastAPI Backend
+Lore — FastAPI Backend
 
 Design: Dark Technical Dashboard (IDE-inspired)
 - Wraps b4 utility to fetch threads from lore.kernel.org
@@ -35,7 +35,7 @@ from pydantic import BaseModel
 # App setup
 # ---------------------------------------------------------------------------
 
-app = FastAPI(title="BPF Mail Dashboard API", version="1.0.0")
+app = FastAPI(title="Lore API", version="1.0.0")
 
 app.add_middleware(
     CORSMiddleware,
@@ -49,7 +49,7 @@ app.add_middleware(
 # Persistent config & cache paths
 # ---------------------------------------------------------------------------
 
-DATA_DIR = Path.home() / ".local" / "share" / "bpf-mail-dashboard"
+DATA_DIR = Path.home() / ".local" / "share" / "lore-mail-dashboard"
 CACHE_DIR = DATA_DIR / "cache"
 THREADS_DIR = DATA_DIR / "threads"
 CONFIG_FILE = DATA_DIR / "config.json"

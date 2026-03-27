@@ -1,5 +1,5 @@
 /*
- * BPF Mail Dashboard — Thread List Component
+ * Lore — Thread List Component
  * Design: Dense, scannable list of thread cards with color-coded type borders
  */
 

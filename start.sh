@@ -1,5 +1,5 @@
 #!/bin/bash
-# BPF Mailing List Dashboard — Startup Script
+# Lore — Startup Script
 # Starts both the FastAPI backend and the Vite frontend dev server
 
 set -e
@@ -7,7 +7,7 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
-echo "=== BPF Mailing List Dashboard ==="
+echo "=== Lore ==="
 echo ""
 
 # Check b4 is installed

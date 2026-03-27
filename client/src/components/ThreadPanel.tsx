@@ -1,5 +1,5 @@
 /*
- * BPF Mail Dashboard — Thread Panel Component
+ * Lore — Thread Panel Component
  * Design: Full-width email reader with monospace body, thread navigation
  */
 

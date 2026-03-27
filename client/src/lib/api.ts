@@ -1,5 +1,5 @@
 /**
- * BPF Mail Dashboard — API Client
+ * Lore — API Client
  * Communicates with the FastAPI backend on port 8765
  */
 
