@@ -710,7 +710,15 @@ def summarize_thread(req: SummarizeRequest):
     summaries = load_summaries()
 
     # Return cached summary if available and not forced
-    if not req.force and req.thread_id in summaries:
+    # Don't serve cached error messages — always regenerate those
+    ERROR_PREFIXES = (
+        "No API key", "claude CLI", "codex CLI",
+        "Summary generation failed", "Ollama error",
+        "AI summarization is disabled",
+    )
+    cached = summaries.get(req.thread_id, "")
+    is_cached_error = any(cached.startswith(p) for p in ERROR_PREFIXES)
+    if not req.force and req.thread_id in summaries and not is_cached_error:
         return {"summary": summaries[req.thread_id], "cached": True}
 
     # Fetch the full thread
