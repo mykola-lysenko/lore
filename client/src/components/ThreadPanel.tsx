@@ -58,11 +58,17 @@ function renderEmailLine(line: string, idx: number) {
   return <div key={idx}>{line}</div>;
 }
 
-function EmailViewer({ email }: { email: EmailMessage }) {
-  const [bodyExpanded, setBodyExpanded] = useState(true);
+function EmailViewer({ email, defaultExpanded = false }: { email: EmailMessage; defaultExpanded?: boolean }) {
+  const [bodyExpanded, setBodyExpanded] = useState(defaultExpanded);
   const segments = parseEmailBody(email.body);
   const initials = getInitials(email.from_name);
   const avatarColor = stringToColor(email.from_email);
+
+  // First line of the body (non-empty, non-quoted) for collapsed preview
+  const previewLine = email.body
+    .split("\n")
+    .map((l) => l.trim())
+    .find((l) => l.length > 0 && !l.startsWith(">") && !l.startsWith("|"));
 
   return (
     <div className="border border-border rounded-md overflow-hidden bg-card">
@@ -106,6 +112,12 @@ function EmailViewer({ email }: { email: EmailMessage }) {
           {email.subject && (
             <p className="text-xs text-muted-foreground mt-0.5 truncate">
               {email.subject}
+            </p>
+          )}
+          {/* Collapsed preview: first line of body */}
+          {!bodyExpanded && previewLine && (
+            <p className="text-[11px] text-muted-foreground/60 mt-0.5 truncate italic">
+              {previewLine.slice(0, 120)}
             </p>
           )}
         </div>
@@ -317,10 +329,10 @@ export function ThreadPanel({
             </div>
           ) : viewMode === "all" ? (
             emails.map((email, i) => (
-              <EmailViewer key={email.id || i} email={email} />
+              <EmailViewer key={email.id || i} email={email} defaultExpanded={i === 0} />
             ))
           ) : currentEmail ? (
-            <EmailViewer email={currentEmail} />
+            <EmailViewer email={currentEmail} defaultExpanded={true} />
           ) : null}
         </div>
       </ScrollArea>
