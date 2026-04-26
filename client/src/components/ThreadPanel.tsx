@@ -135,7 +135,7 @@ function EmailViewer({ email, defaultExpanded = false }: { email: EmailMessage; 
       {/* Email body — each expanded email has its own scroll region */}
       {bodyExpanded && (
         <div className="border-t border-border">
-          <ScrollArea className="max-h-[60vh]">
+          <div className="overflow-y-auto" style={{ maxHeight: "60vh" }}>
             <div className="px-4 py-3">
               <div className="email-body text-foreground/85">
                 {segments.map((seg, i) =>
@@ -156,7 +156,7 @@ function EmailViewer({ email, defaultExpanded = false }: { email: EmailMessage; 
                 )}
               </div>
             </div>
-          </ScrollArea>
+          </div>
         </div>
       )}
     </div>
@@ -195,7 +195,7 @@ export function ThreadPanel({
   };
 
   return (
-    <div className="flex-1 flex flex-col min-h-0 min-w-0">
+    <div className="h-full flex flex-col overflow-hidden">
       {/* Panel header */}
       <div className="px-4 py-3 border-b border-border bg-card/50 shrink-0">
         <div className="flex items-start justify-between gap-3">
@@ -323,25 +323,26 @@ export function ThreadPanel({
         </div>
       </div>
 
-      {/* AI Summary section — scrollable, capped at 40% viewport height */}
+      {/* AI Summary section — capped at 40vh, independently scrollable */}
       {thread.summary && (
-        <div className="border-b border-border bg-blue-500/5 shrink-0" style={{ maxHeight: "40vh" }}>
-          <ScrollArea className="h-full max-h-[40vh]">
-            <div className="px-4 py-3">
-              <div className="flex items-center gap-1.5 mb-2">
-                <Sparkles className="w-3.5 h-3.5 text-blue-400" />
-                <span className="text-xs font-medium text-blue-400">AI Summary</span>
-              </div>
-              <div className="text-xs text-foreground/85 leading-relaxed prose prose-invert prose-xs max-w-none">
-                <Streamdown>{thread.summary}</Streamdown>
-              </div>
+        <div
+          className="border-b border-border bg-blue-500/5 shrink-0 overflow-y-auto"
+          style={{ maxHeight: "40vh" }}
+        >
+          <div className="px-4 py-3">
+            <div className="flex items-center gap-1.5 mb-2">
+              <Sparkles className="w-3.5 h-3.5 text-blue-400" />
+              <span className="text-xs font-medium text-blue-400">AI Summary</span>
             </div>
-          </ScrollArea>
+            <div className="text-xs text-foreground/85 leading-relaxed prose prose-invert prose-xs max-w-none">
+              <Streamdown>{thread.summary}</Streamdown>
+            </div>
+          </div>
         </div>
       )}
 
-      {/* Email content */}
-      <ScrollArea className="flex-1">
+      {/* Email content — takes remaining height, scrolls independently */}
+      <div className="flex-1 overflow-y-auto min-h-0">
         <div className="p-4 space-y-3">
           {loading ? (
             <div className="flex items-center justify-center py-12">
@@ -355,7 +356,7 @@ export function ThreadPanel({
             <EmailViewer email={currentEmail} defaultExpanded={true} />
           ) : null}
         </div>
-      </ScrollArea>
+      </div>
     </div>
   );
 }
