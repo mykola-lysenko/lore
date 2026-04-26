@@ -723,6 +723,8 @@ def get_config():
     safe = dict(cfg)
     if safe.get("ai_api_key"):
         safe["ai_api_key"] = "***" + safe["ai_api_key"][-4:] if len(safe["ai_api_key"]) > 4 else "****"
+    # Expose the real managed cache path so the UI can show it as placeholder
+    safe["managed_data_dir"] = str(DATA_DIR)
     return safe
 
 

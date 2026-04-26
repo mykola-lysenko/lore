@@ -361,11 +361,11 @@ export function Sidebar({
                     onChange={(e) =>
                       updateLocal("b4_folder", e.target.value || null)
                     }
-                    placeholder="/path/to/mbox/folder"
+                    placeholder={config?.managed_data_dir || "~/.local/share/lore-mail-dashboard"}
                     className="h-7 text-xs bg-input border-border font-mono"
                   />
                   <p className="text-[10px] text-muted-foreground">
-                    Leave empty to use managed cache
+                    Leave empty to use managed cache ({config?.managed_data_dir || "~/.local/share/lore-mail-dashboard"})
                   </p>
                 </div>
 

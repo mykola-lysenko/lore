@@ -51,6 +51,7 @@ export interface Config {
   ai_model: string;
   ai_api_key: string;
   ollama_url: string;
+  managed_data_dir?: string; // real path to the managed cache dir, returned by backend
 }
 
 export interface KnownList {
