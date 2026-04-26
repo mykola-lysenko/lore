@@ -5,6 +5,11 @@
  */
 
 import { useState, useEffect, useCallback, useRef } from "react";
+import {
+  ResizablePanelGroup,
+  ResizablePanel,
+  ResizableHandle,
+} from "@/components/ui/resizable";
 import { api, type ThreadSummary, type Thread, type Config } from "@/lib/api";
 import { Sidebar } from "@/components/Sidebar";
 import { ThreadList } from "@/components/ThreadList";
@@ -266,7 +271,7 @@ export default function Dashboard() {
 
   return (
     <div className="flex h-screen overflow-hidden bg-background text-foreground">
-      {/* Left Sidebar */}
+      {/* Left Sidebar — fixed width, not part of resizable group */}
       <Sidebar
         open={sidebarOpen}
         onToggle={() => setSidebarOpen((v) => !v)}
@@ -292,35 +297,45 @@ export default function Dashboard() {
         onCancelQueue={handleCancelQueue}
       />
 
-      {/* Main content area */}
-      <div className="flex flex-1 overflow-hidden">
-        {/* Thread list */}
-        <ThreadList
-          threads={filteredThreads}
-          selectedId={selectedThread?.id}
-          selectedThread={selectedThread}
-          loading={loadingThreads}
-          onSelect={handleSelectThread}
-          onSummarize={handleSummarize}
-          onEmailSelect={(emailIndex) => {
-            // Signal the panel to switch to single mode at this email index
-            setSelectedEmailIndex(emailIndex);
-          }}
-          backendOnline={backendOnline}
-        />
+      {/* Resizable main area: thread list + thread panel */}
+      <ResizablePanelGroup direction="horizontal" className="flex-1 overflow-hidden">
+        {/* Thread list panel */}
+        <ResizablePanel defaultSize={selectedThread ? 40 : 100} minSize={20}>
+          <div className="h-full overflow-hidden">
+            <ThreadList
+              threads={filteredThreads}
+              selectedId={selectedThread?.id}
+              selectedThread={selectedThread}
+              loading={loadingThreads}
+              onSelect={handleSelectThread}
+              onSummarize={handleSummarize}
+              onEmailSelect={(emailIndex) => {
+                setSelectedEmailIndex(emailIndex);
+              }}
+              backendOnline={backendOnline}
+            />
+          </div>
+        </ResizablePanel>
 
         {/* Thread detail panel */}
         {selectedThread && (
-          <ThreadPanel
-            thread={selectedThread}
-            loading={loadingThread}
-            onClose={handleCloseThread}
-            onSummarize={handleSummarize}
-            initialEmailIndex={selectedEmailIndex}
-            onEmailIndexConsumed={() => setSelectedEmailIndex(null)}
-          />
+          <>
+            <ResizableHandle withHandle />
+            <ResizablePanel defaultSize={60} minSize={25}>
+              <div className="h-full overflow-hidden">
+                <ThreadPanel
+                  thread={selectedThread}
+                  loading={loadingThread}
+                  onClose={handleCloseThread}
+                  onSummarize={handleSummarize}
+                  initialEmailIndex={selectedEmailIndex}
+                  onEmailIndexConsumed={() => setSelectedEmailIndex(null)}
+                />
+              </div>
+            </ResizablePanel>
+          </>
         )}
-      </div>
+      </ResizablePanelGroup>
     </div>
   );
 }

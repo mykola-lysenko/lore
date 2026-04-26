@@ -132,27 +132,31 @@ function EmailViewer({ email, defaultExpanded = false }: { email: EmailMessage; 
         </div>
       </div>
 
-      {/* Email body */}
+      {/* Email body — each expanded email has its own scroll region */}
       {bodyExpanded && (
-        <div className="border-t border-border px-4 py-3">
-          <div className="email-body text-foreground/85">
-            {segments.map((seg, i) =>
-              seg.type === "quoted" ? (
-                <div
-                  key={i}
-                  className="border-l-2 border-border pl-3 text-muted-foreground my-1"
-                >
-                  {seg.text.split("\n").map((line, j) => (
-                    <div key={j}>{line}</div>
-                  ))}
-                </div>
-              ) : (
-                <div key={i}>
-                  {seg.text.split("\n").map((line, j) => renderEmailLine(line, j))}
-                </div>
-              )
-            )}
-          </div>
+        <div className="border-t border-border">
+          <ScrollArea className="max-h-[60vh]">
+            <div className="px-4 py-3">
+              <div className="email-body text-foreground/85">
+                {segments.map((seg, i) =>
+                  seg.type === "quoted" ? (
+                    <div
+                      key={i}
+                      className="border-l-2 border-border pl-3 text-muted-foreground my-1"
+                    >
+                      {seg.text.split("\n").map((line, j) => (
+                        <div key={j}>{line}</div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div key={i}>
+                      {seg.text.split("\n").map((line, j) => renderEmailLine(line, j))}
+                    </div>
+                  )
+                )}
+              </div>
+            </div>
+          </ScrollArea>
         </div>
       )}
     </div>
