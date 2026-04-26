@@ -17,7 +17,9 @@ import json
 import mailbox
 import os
 import re
+import shutil
 import subprocess
+import sys
 import tempfile
 import time
 import urllib.parse
@@ -27,9 +29,30 @@ from typing import Any, Optional
 
 import b4
 import requests
+
+# ---------------------------------------------------------------------------
+# Resolve the b4 binary: prefer the one next to this Python interpreter
+# (i.e. inside the .venv/bin/ directory) so subprocess calls work even when
+# the system PATH does not include the virtualenv.
+# ---------------------------------------------------------------------------
+def _find_b4_binary() -> str:
+    # 1. Same bin dir as the running Python (covers .venv installs)
+    venv_b4 = Path(sys.executable).parent / "b4"
+    if venv_b4.is_file() and os.access(venv_b4, os.X_OK):
+        return str(venv_b4)
+    # 2. Fall back to whatever is on PATH
+    system_b4 = shutil.which("b4")
+    if system_b4:
+        return system_b4
+    raise RuntimeError(
+        "b4 binary not found. Install it with: pip install b4"
+    )
+
 from fastapi import BackgroundTasks, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
+
+B4_BIN = _find_b4_binary()
 
 # ---------------------------------------------------------------------------
 # App setup
@@ -363,7 +386,7 @@ def fetch_full_thread(msgid: str, cfg: dict) -> dict:
 
         if not mbox_path.exists():
             result = subprocess.run(
-                ["b4", "mbox", "-o", outdir, msgid],
+                [B4_BIN, "mbox", "-o", outdir, msgid],
                 capture_output=True,
                 text=True,
                 timeout=60,
