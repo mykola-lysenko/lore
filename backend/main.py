@@ -54,6 +54,7 @@ CACHE_DIR = DATA_DIR / "cache"
 THREADS_DIR = DATA_DIR / "threads"
 CONFIG_FILE = DATA_DIR / "config.json"
 SUMMARIES_FILE = DATA_DIR / "summaries.json"
+READ_STATE_FILE = DATA_DIR / "read-state.json"
 
 for d in [DATA_DIR, CACHE_DIR, THREADS_DIR]:
     d.mkdir(parents=True, exist_ok=True)
@@ -68,7 +69,7 @@ DEFAULT_CONFIG = {
     "lore_base_url": "https://lore.kernel.org",
     "days_back": 30,
     "b4_folder": None,  # None = use managed cache
-    "ai_provider": "claude",  # claude | openai | ollama | none
+    "ai_provider": "claude-cli",  # claude-cli | codex-cli | claude | openai | ollama | none
     "ai_model": "claude-opus-4-5",
     "ai_api_key": "",
     "ollama_url": "http://localhost:11434",
@@ -105,6 +106,21 @@ def load_summaries() -> dict:
 def save_summaries(summaries: dict) -> None:
     with open(SUMMARIES_FILE, "w") as f:
         json.dump(summaries, f, indent=2)
+
+
+def load_read_state() -> set:
+    if READ_STATE_FILE.exists():
+        try:
+            with open(READ_STATE_FILE) as f:
+                return set(json.load(f))
+        except Exception:
+            pass
+    return set()
+
+
+def save_read_state(read_ids: set) -> None:
+    with open(READ_STATE_FILE, "w") as f:
+        json.dump(sorted(read_ids), f, indent=2)
 
 
 # ---------------------------------------------------------------------------
@@ -477,6 +493,78 @@ def summarize_with_ollama(prompt: str, cfg: dict) -> str:
         return f"Ollama error: {e}"
 
 
+def summarize_with_claude_cli(prompt: str, cfg: dict) -> str:
+    """Generate summary using the local `claude` CLI (Claude Code) — no API key needed."""
+    import shutil
+    binary = shutil.which("claude")
+    if not binary:
+        return (
+            "'claude' CLI not found in PATH. "
+            "Install Claude Code (https://claude.ai/code) and make sure it is on your PATH."
+        )
+    try:
+        result = subprocess.run(
+            [binary, "-p", prompt],
+            capture_output=True,
+            text=True,
+            timeout=120,
+        )
+        if result.returncode != 0:
+            stderr = result.stderr.strip()
+            return f"claude CLI error (exit {result.returncode}): {stderr or 'no output'}"
+        return result.stdout.strip()
+    except subprocess.TimeoutExpired:
+        return "claude CLI timed out after 120 seconds."
+    except Exception as e:
+        return f"claude CLI failed: {e}"
+
+
+def summarize_with_codex_cli(prompt: str, cfg: dict) -> str:
+    """Generate summary using the local `codex` CLI (Meta Codex Plugboard) — no API key needed."""
+    import shutil
+    binary = shutil.which("codex")
+    if not binary:
+        return (
+            "'codex' CLI not found in PATH. "
+            "Make sure the Codex CLI is installed and on your PATH."
+        )
+    try:
+        # Codex requires a TTY on stdin; work around by writing the prompt to a
+        # temp file and feeding it via 'script' (macOS/Linux) which allocates a
+        # pseudo-TTY, or by using a shell heredoc through bash -c.
+        # The simplest cross-platform approach: use 'script' if available,
+        # otherwise fall back to a shell pipe with 'echo | codex'.
+        import shlex
+        import shutil as _shutil
+
+        # Try: echo prompt | codex  (some builds accept piped stdin)
+        result = subprocess.run(
+            f"{shlex.quote(binary)} {shlex.quote(prompt)}",
+            shell=True,
+            capture_output=True,
+            text=True,
+            timeout=120,
+        )
+        if result.returncode != 0:
+            stderr = result.stderr.strip()
+            # If still a TTY error, try via 'script' pseudo-TTY wrapper
+            if "stdin is not a terminal" in stderr and _shutil.which("script"):
+                result = subprocess.run(
+                    ["script", "-q", "/dev/null", binary, prompt],
+                    capture_output=True,
+                    text=True,
+                    timeout=120,
+                )
+                if result.returncode == 0:
+                    return result.stdout.strip()
+            return f"codex CLI error (exit {result.returncode}): {stderr or 'no output'}"
+        return result.stdout.strip()
+    except subprocess.TimeoutExpired:
+        return "codex CLI timed out after 120 seconds."
+    except Exception as e:
+        return f"codex CLI failed: {e}"
+
+
 def generate_summary(thread: dict, cfg: dict) -> str:
     """Generate an AI summary for a thread using the configured provider."""
     provider = cfg.get("ai_provider", "claude")
@@ -489,6 +577,10 @@ def generate_summary(thread: dict, cfg: dict) -> str:
             return summarize_with_openai(prompt, cfg)
         elif provider == "ollama":
             return summarize_with_ollama(prompt, cfg)
+        elif provider == "claude-cli":
+            return summarize_with_claude_cli(prompt, cfg)
+        elif provider == "codex-cli":
+            return summarize_with_codex_cli(prompt, cfg)
         else:
             return "AI summarization is disabled. Enable a provider in Settings."
     except Exception as e:
@@ -516,6 +608,82 @@ class SummarizeRequest(BaseModel):
     force: bool = False
 
 
+class MarkReadRequest(BaseModel):
+    thread_ids: list[str]
+
+
+class EnqueueRequest(BaseModel):
+    thread_ids: list[str]  # ordered list of thread IDs to summarize
+
+
+# ---------------------------------------------------------------------------
+# Background summarization queue
+# ---------------------------------------------------------------------------
+
+# In-memory queue state (reset on restart, which is fine — frontend re-enqueues)
+_queue: list[str] = []          # pending thread IDs in order
+_queue_lock = asyncio.Lock()
+_in_progress: Optional[str] = None  # currently summarizing thread ID
+_completed: list[str] = []      # successfully summarized this session
+_failed: list[str] = []         # failed this session
+_worker_running = False
+
+ERROR_PREFIXES = (
+    "No API key", "claude CLI", "codex CLI",
+    "Summary generation failed", "Ollama error",
+    "AI summarization is disabled",
+)
+
+
+async def _summarize_worker():
+    """Background worker that drains the queue one thread at a time."""
+    global _in_progress, _worker_running
+    _worker_running = True
+    try:
+        while True:
+            async with _queue_lock:
+                if not _queue:
+                    _worker_running = False
+                    return
+                thread_id = _queue.pop(0)
+
+            _in_progress = thread_id
+            try:
+                cfg = load_config()
+                summaries = load_summaries()
+                cached = summaries.get(thread_id, "")
+                is_error = any(cached.startswith(p) for p in ERROR_PREFIXES)
+                # Skip if already has a good summary
+                if cached and not is_error:
+                    _completed.append(thread_id)
+                    _in_progress = None
+                    continue
+
+                # Run summarization in a thread pool so it doesn't block the event loop
+                loop = asyncio.get_event_loop()
+                thread_data = await loop.run_in_executor(
+                    None, fetch_full_thread, thread_id, cfg
+                )
+                summary = await loop.run_in_executor(
+                    None, generate_summary, thread_data, cfg
+                )
+                summaries[thread_id] = summary
+                save_summaries(summaries)
+                if any(summary.startswith(p) for p in ERROR_PREFIXES):
+                    _failed.append(thread_id)
+                else:
+                    _completed.append(thread_id)
+            except Exception as e:
+                _failed.append(thread_id)
+            finally:
+                _in_progress = None
+
+            # Small delay between requests to avoid hammering the AI provider
+            await asyncio.sleep(1)
+    finally:
+        _worker_running = False
+
+
 # ---------------------------------------------------------------------------
 # API Routes
 # ---------------------------------------------------------------------------
@@ -535,6 +703,22 @@ def get_config():
     return safe
 
 
+# Error summary patterns — these are stale and should be cleared when provider changes
+_SUMMARY_ERROR_PATTERNS = [
+    r"^No API key",
+    r"^claude CLI",
+    r"^codex CLI",
+    r"^Summary generation failed",
+    r"^Ollama error",
+    r"^AI summarization is disabled",
+    r"^Could not find",
+]
+
+
+def _is_error_summary(text: str) -> bool:
+    return any(re.match(p, text, re.IGNORECASE) for p in _SUMMARY_ERROR_PATTERNS)
+
+
 @app.put("/api/config")
 def update_config(update: ConfigUpdate):
     cfg = load_config()
@@ -542,8 +726,18 @@ def update_config(update: ConfigUpdate):
     # Don't overwrite key with masked value
     if data.get("ai_api_key", "").startswith("***"):
         data.pop("ai_api_key")
+
+    ai_changed = "ai_provider" in data or "ai_api_key" in data or "ai_model" in data
     cfg.update(data)
     save_config(cfg)
+
+    # If AI settings changed, purge all cached error summaries so they get retried
+    if ai_changed:
+        summaries = load_summaries()
+        cleaned = {k: v for k, v in summaries.items() if not _is_error_summary(v)}
+        if len(cleaned) != len(summaries):
+            save_summaries(cleaned)
+
     return {"status": "saved"}
 
 
@@ -558,24 +752,28 @@ def list_threads(refresh: bool = False):
 
     if not refresh and cache_file.exists():
         age = time.time() - cache_file.stat().st_mtime
-        if age < 600:  # 10-minute cache
+        if age < 86400:  # 24-hour cache — avoids re-fetching on every restart
             with open(cache_file) as f:
                 threads = json.load(f)
-            # Merge in any saved summaries
+            # Merge in any saved summaries and read state
             summaries = load_summaries()
+            read_ids = load_read_state()
             for t in threads:
                 if t["id"] in summaries:
                     t["summary"] = summaries[t["id"]]
+                t["is_read"] = t["id"] in read_ids
             return {"threads": threads, "cached": True, "count": len(threads)}
 
     threads = fetch_thread_list(cfg)
 
-    # Merge in saved summaries
+    # Merge in saved summaries and read state
     summaries = load_summaries()
+    read_ids = load_read_state()
     for t in threads:
         if t["id"] in summaries:
             t["summary"] = summaries[t["id"]]
             t["has_full_thread"] = True
+        t["is_read"] = t["id"] in read_ids
 
     # Cache the results
     with open(cache_file, "w") as f:
@@ -610,7 +808,15 @@ def summarize_thread(req: SummarizeRequest):
     summaries = load_summaries()
 
     # Return cached summary if available and not forced
-    if not req.force and req.thread_id in summaries:
+    # Don't serve cached error messages — always regenerate those
+    ERROR_PREFIXES = (
+        "No API key", "claude CLI", "codex CLI",
+        "Summary generation failed", "Ollama error",
+        "AI summarization is disabled",
+    )
+    cached = summaries.get(req.thread_id, "")
+    is_cached_error = any(cached.startswith(p) for p in ERROR_PREFIXES)
+    if not req.force and req.thread_id in summaries and not is_cached_error:
         return {"summary": summaries[req.thread_id], "cached": True}
 
     # Fetch the full thread
@@ -624,6 +830,72 @@ def summarize_thread(req: SummarizeRequest):
     save_summaries(summaries)
 
     return {"summary": summary, "cached": False}
+
+
+@app.post("/api/queue/enqueue")
+async def enqueue_summaries(req: EnqueueRequest, background_tasks: BackgroundTasks):
+    """
+    Add thread IDs to the background summarization queue.
+    Skips IDs already in the queue or currently in progress.
+    Starts the worker if it is not already running.
+    """
+    global _worker_running
+    async with _queue_lock:
+        existing = set(_queue) | ({_in_progress} if _in_progress else set())
+        new_ids = [tid for tid in req.thread_ids if tid not in existing]
+        _queue.extend(new_ids)
+
+    if not _worker_running and _queue:
+        background_tasks.add_task(_summarize_worker)
+
+    return {"queued": len(new_ids), "total_pending": len(_queue)}
+
+
+@app.get("/api/queue/status")
+def queue_status():
+    """Return current queue state for the frontend progress indicator."""
+    summaries = load_summaries()
+    return {
+        "pending": len(_queue),
+        "in_progress": _in_progress,
+        "completed": len(_completed),
+        "failed": len(_failed),
+        "worker_running": _worker_running,
+        # Return the latest completed thread ID so the frontend can refresh it
+        "last_completed": _completed[-1] if _completed else None,
+        "last_failed": _failed[-1] if _failed else None,
+    }
+
+
+@app.delete("/api/queue/clear")
+async def clear_queue():
+    """Cancel all pending items in the queue (does not stop in-progress item)."""
+    async with _queue_lock:
+        count = len(_queue)
+        _queue.clear()
+    return {"cleared": count}
+
+
+@app.get("/api/read-state")
+def get_read_state():
+    """Return the set of read thread IDs."""
+    return {"read_ids": sorted(load_read_state())}
+
+
+@app.post("/api/read-state")
+def mark_read(req: MarkReadRequest):
+    """Mark one or more threads as read."""
+    read_ids = load_read_state()
+    read_ids.update(req.thread_ids)
+    save_read_state(read_ids)
+    return {"status": "ok", "read_count": len(read_ids)}
+
+
+@app.delete("/api/read-state")
+def mark_all_unread():
+    """Reset all read state (mark everything as unread)."""
+    save_read_state(set())
+    return {"status": "cleared"}
 
 
 @app.delete("/api/cache")

@@ -18,6 +18,7 @@ export interface ThreadSummary {
   lore_url: string;
   has_full_thread: boolean;
   summary: string | null;
+  is_read: boolean;
 }
 
 export interface EmailMessage {
@@ -46,7 +47,7 @@ export interface Config {
   lore_base_url: string;
   days_back: number;
   b4_folder: string | null;
-  ai_provider: "claude" | "openai" | "ollama" | "none";
+  ai_provider: "claude" | "openai" | "ollama" | "claude-cli" | "codex-cli" | "none";
   ai_model: string;
   ai_api_key: string;
   ollama_url: string;
@@ -100,4 +101,34 @@ export const api = {
 
   knownLists: () =>
     request<{ lists: KnownList[] }>("/api/lists"),
+
+  markRead: (threadIds: string[]) =>
+    request<{ status: string; read_count: number }>("/api/read-state", {
+      method: "POST",
+      body: JSON.stringify({ thread_ids: threadIds }),
+    }),
+
+  markAllUnread: () =>
+    request<{ status: string }>("/api/read-state", { method: "DELETE" }),
+
+  // Background summarization queue
+  enqueueForSummary: (threadIds: string[]) =>
+    request<{ queued: number; total_pending: number }>("/api/queue/enqueue", {
+      method: "POST",
+      body: JSON.stringify({ thread_ids: threadIds }),
+    }),
+
+  getQueueStatus: () =>
+    request<{
+      pending: number;
+      in_progress: string | null;
+      completed: number;
+      failed: number;
+      worker_running: boolean;
+      last_completed: string | null;
+      last_failed: string | null;
+    }>("/api/queue/status"),
+
+  clearQueue: () =>
+    request<{ cleared: number }>("/api/queue/clear", { method: "DELETE" }),
 };

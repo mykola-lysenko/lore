@@ -4,7 +4,7 @@
  */
 
 import { useState } from "react";
-import { type ThreadSummary } from "@/lib/api";
+import { type ThreadSummary, type Thread, type EmailMessage } from "@/lib/api";
 import {
   cn,
   formatDate,
@@ -15,42 +15,111 @@ import {
 } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Sparkles, MessageSquare, Users, ExternalLink, Loader2 } from "lucide-react";
+import { Sparkles, MessageSquare, Users, ExternalLink, Loader2, Mail, Reply } from "lucide-react";
 import { Streamdown } from "streamdown";
 
 interface ThreadListProps {
   threads: ThreadSummary[];
   selectedId?: string;
+  selectedThread?: Thread | null;
   loading: boolean;
   onSelect: (thread: ThreadSummary) => void;
   onSummarize: (threadId: string, force?: boolean) => Promise<string | null>;
+  onEmailSelect?: (emailIndex: number) => void;
   backendOnline: boolean;
+}
+
+function ThreadOutline({
+  emails,
+  onEmailSelect,
+}: {
+  emails: EmailMessage[];
+  onEmailSelect?: (index: number) => void;
+}) {
+  return (
+    <div className="mt-2 ml-9 border-l border-border/50 pl-3 space-y-0.5">
+      {emails.map((email, i) => {
+        const initials = getInitials(email.from_name);
+        const color = stringToColor(email.from_email);
+        const isReply = i > 0;
+        return (
+          <div
+            key={email.id || i}
+            className="flex items-center gap-2 py-1 rounded hover:bg-accent/20 cursor-pointer group transition-colors px-1"
+            onClick={(e) => {
+              e.stopPropagation();
+              onEmailSelect?.(i);
+            }}
+          >
+            <div className={cn("w-4 h-4 rounded-full flex items-center justify-center text-[8px] font-bold text-white shrink-0", color)}>
+              {initials}
+            </div>
+            <span className="text-[11px] text-muted-foreground truncate flex-1 group-hover:text-foreground transition-colors">
+              {isReply ? (
+                <span className="inline-flex items-center gap-1">
+                  <Reply className="w-2.5 h-2.5 shrink-0" />
+                  {email.from_name || email.from_email}
+                </span>
+              ) : (
+                <span className="font-medium text-foreground/80">{email.from_name || email.from_email}</span>
+              )}
+            </span>
+            <span className="text-[10px] text-muted-foreground/60 shrink-0 font-mono">
+              {email.date ? formatDate(email.date) : ""}
+            </span>
+            <a
+              href={email.lore_url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <ExternalLink className="w-2.5 h-2.5 text-muted-foreground hover:text-blue-400" />
+            </a>
+          </div>
+        );
+      })}
+    </div>
+  );
 }
 
 function ThreadCard({
   thread,
   selected,
+  selectedThread,
   onSelect,
   onSummarize,
+  onEmailSelect,
 }: {
   thread: ThreadSummary;
   selected: boolean;
+  selectedThread?: Thread | null;
   onSelect: () => void;
   onSummarize: (force?: boolean) => Promise<string | null>;
+  onEmailSelect?: (index: number) => void;
 }) {
   const [summarizing, setSummarizing] = useState(false);
   const [summaryExpanded, setSummaryExpanded] = useState(false);
 
-  const handleSummarize = async (e: React.MouseEvent) => {
+  const handleSummarize = async (e: React.MouseEvent, force = false) => {
     e.stopPropagation();
     setSummarizing(true);
     setSummaryExpanded(true);
-    await onSummarize();
+    await onSummarize(force);
     setSummarizing(false);
   };
 
+  // A summary is considered an error if it starts with a known error prefix
+  const isSummaryError = thread.summary
+    ? /^(No API key|claude CLI|codex CLI|Summary generation failed|Ollama error|AI summarization is disabled)/i.test(
+        thread.summary
+      )
+    : false;
+
   const initials = getInitials(thread.author);
   const avatarColor = stringToColor(thread.author_email);
+
+  const isUnread = !thread.is_read;
 
   return (
     <div
@@ -65,14 +134,19 @@ function ThreadCard({
     >
       {/* Top row: avatar + subject + date */}
       <div className="flex items-start gap-2.5">
-        {/* Avatar */}
-        <div
-          className={cn(
-            "w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold text-white shrink-0 mt-0.5",
-            avatarColor
+        {/* Avatar with unread dot */}
+        <div className="relative shrink-0 mt-0.5">
+          <div
+            className={cn(
+              "w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold text-white",
+              avatarColor
+            )}
+          >
+            {initials}
+          </div>
+          {isUnread && (
+            <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-blue-400 border-2 border-background" />
           )}
-        >
-          {initials}
         </div>
 
         {/* Subject + meta */}
@@ -80,7 +154,8 @@ function ThreadCard({
           <div className="flex items-start justify-between gap-2">
             <h3
               className={cn(
-                "text-sm font-medium leading-snug line-clamp-2",
+                "text-sm leading-snug line-clamp-2",
+                isUnread ? "font-semibold text-foreground" : "font-medium",
                 selected ? "text-foreground" : "text-foreground/90"
               )}
             >
@@ -130,12 +205,26 @@ function ThreadCard({
         </div>
       </div>
 
+      {/* Thread outline — shown when this card is selected and full thread is loaded */}
+      {selected && selectedThread?.emails && selectedThread.emails.length > 0 && (
+        <ThreadOutline emails={selectedThread.emails} onEmailSelect={onEmailSelect} />
+      )}
+
       {/* Summary section */}
-      {thread.summary ? (
+      {thread.summary && !isSummaryError ? (
         <div className="mt-2 ml-9">
           {summaryExpanded || thread.summary.length < 200 ? (
-            <div className="text-xs text-muted-foreground leading-relaxed prose prose-invert prose-xs max-w-none">
-              <Streamdown>{thread.summary.slice(0, 600)}</Streamdown>
+            <div
+              className="max-h-48 overflow-y-auto pr-1 text-xs text-muted-foreground leading-relaxed prose prose-invert prose-xs max-w-none"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <Streamdown>{thread.summary}</Streamdown>
+              <button
+                className="mt-1 text-[10px] text-muted-foreground/50 hover:text-blue-400 transition-colors"
+                onClick={(e) => handleSummarize(e, true)}
+              >
+                {summarizing ? "Regenerating..." : "↺ Regenerate"}
+              </button>
             </div>
           ) : (
             <button
@@ -150,21 +239,26 @@ function ThreadCard({
           )}
         </div>
       ) : (
-        <div className="mt-2 ml-9 opacity-0 group-hover:opacity-100 transition-opacity">
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-6 text-[11px] text-muted-foreground hover:text-blue-400 px-2 gap-1"
-            onClick={handleSummarize}
-            disabled={summarizing}
-          >
-            {summarizing ? (
-              <Loader2 className="w-3 h-3 animate-spin" />
-            ) : (
-              <Sparkles className="w-3 h-3" />
-            )}
-            {summarizing ? "Summarizing..." : "AI Summary"}
-          </Button>
+        <div className="mt-2 ml-9">
+          {isSummaryError && (
+            <p className="text-[11px] text-red-400/80 mb-1 line-clamp-2">{thread.summary}</p>
+          )}
+          <div className={cn(!isSummaryError && "opacity-0 group-hover:opacity-100 transition-opacity")}>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-6 text-[11px] text-muted-foreground hover:text-blue-400 px-2 gap-1"
+              onClick={(e) => handleSummarize(e, isSummaryError)}
+              disabled={summarizing}
+            >
+              {summarizing ? (
+                <Loader2 className="w-3 h-3 animate-spin" />
+              ) : (
+                <Sparkles className="w-3 h-3" />
+              )}
+              {summarizing ? "Summarizing..." : isSummaryError ? "Retry Summary" : "AI Summary"}
+            </Button>
+          </div>
         </div>
       )}
     </div>
@@ -174,9 +268,11 @@ function ThreadCard({
 export function ThreadList({
   threads,
   selectedId,
+  selectedThread,
   loading,
   onSelect,
   onSummarize,
+  onEmailSelect,
   backendOnline,
 }: ThreadListProps) {
   if (!backendOnline) {
@@ -238,7 +334,7 @@ export function ThreadList({
   }
 
   return (
-    <div className="flex-1 flex flex-col overflow-hidden min-w-[340px] max-w-[520px] border-r border-border">
+    <div className="flex-1 flex flex-col overflow-hidden border-r border-border">
       {/* List header */}
       <div className="px-4 py-2 border-b border-border bg-card/50 flex items-center justify-between shrink-0">
         <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
@@ -256,8 +352,10 @@ export function ThreadList({
             key={thread.id}
             thread={thread}
             selected={thread.id === selectedId}
+            selectedThread={thread.id === selectedId ? selectedThread : null}
             onSelect={() => onSelect(thread)}
             onSummarize={(force) => onSummarize(thread.id, force)}
+            onEmailSelect={onEmailSelect}
           />
         ))}
       </div>

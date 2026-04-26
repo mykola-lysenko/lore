@@ -3,7 +3,7 @@
  * Design: Full-width email reader with monospace body, thread navigation
  */
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { type Thread, type EmailMessage } from "@/lib/api";
 import {
   cn,
@@ -36,6 +36,8 @@ interface ThreadPanelProps {
   loading: boolean;
   onClose: () => void;
   onSummarize: (threadId: string, force?: boolean) => Promise<string | null>;
+  initialEmailIndex?: number | null;
+  onEmailIndexConsumed?: () => void;
 }
 
 function renderEmailLine(line: string, idx: number) {
@@ -58,11 +60,17 @@ function renderEmailLine(line: string, idx: number) {
   return <div key={idx}>{line}</div>;
 }
 
-function EmailViewer({ email }: { email: EmailMessage }) {
-  const [bodyExpanded, setBodyExpanded] = useState(true);
+function EmailViewer({ email, defaultExpanded = false }: { email: EmailMessage; defaultExpanded?: boolean }) {
+  const [bodyExpanded, setBodyExpanded] = useState(defaultExpanded);
   const segments = parseEmailBody(email.body);
   const initials = getInitials(email.from_name);
   const avatarColor = stringToColor(email.from_email);
+
+  // First line of the body (non-empty, non-quoted) for collapsed preview
+  const previewLine = email.body
+    .split("\n")
+    .map((l) => l.trim())
+    .find((l) => l.length > 0 && !l.startsWith(">") && !l.startsWith("|"));
 
   return (
     <div className="border border-border rounded-md overflow-hidden bg-card">
@@ -108,6 +116,12 @@ function EmailViewer({ email }: { email: EmailMessage }) {
               {email.subject}
             </p>
           )}
+          {/* Collapsed preview: first line of body */}
+          {!bodyExpanded && previewLine && (
+            <p className="text-[11px] text-muted-foreground/60 mt-0.5 truncate italic">
+              {previewLine.slice(0, 120)}
+            </p>
+          )}
         </div>
         <div className="shrink-0 text-muted-foreground">
           {bodyExpanded ? (
@@ -150,10 +164,22 @@ export function ThreadPanel({
   loading,
   onClose,
   onSummarize,
+  initialEmailIndex,
+  onEmailIndexConsumed,
 }: ThreadPanelProps) {
   const [currentEmailIndex, setCurrentEmailIndex] = useState(0);
   const [viewMode, setViewMode] = useState<"all" | "single">("all");
   const [summarizing, setSummarizing] = useState(false);
+
+  // When the outline in the middle pane is clicked, jump to that email in single mode
+  useEffect(() => {
+    if (initialEmailIndex != null) {
+      setCurrentEmailIndex(initialEmailIndex);
+      setViewMode("single");
+      onEmailIndexConsumed?.();
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialEmailIndex]);
 
   const emails = thread.emails || [];
   const currentEmail = emails[currentEmailIndex];
@@ -165,7 +191,7 @@ export function ThreadPanel({
   };
 
   return (
-    <div className="flex-1 flex flex-col overflow-hidden min-w-0">
+    <div className="flex-1 flex flex-col min-h-0 min-w-0">
       {/* Panel header */}
       <div className="px-4 py-3 border-b border-border bg-card/50 shrink-0">
         <div className="flex items-start justify-between gap-3">
@@ -293,16 +319,20 @@ export function ThreadPanel({
         </div>
       </div>
 
-      {/* AI Summary section */}
+      {/* AI Summary section — scrollable, capped at 40% viewport height */}
       {thread.summary && (
-        <div className="px-4 py-3 border-b border-border bg-blue-500/5 shrink-0">
-          <div className="flex items-center gap-1.5 mb-2">
-            <Sparkles className="w-3.5 h-3.5 text-blue-400" />
-            <span className="text-xs font-medium text-blue-400">AI Summary</span>
-          </div>
-          <div className="text-xs text-foreground/85 leading-relaxed prose prose-invert prose-xs max-w-none">
-            <Streamdown>{thread.summary}</Streamdown>
-          </div>
+        <div className="border-b border-border bg-blue-500/5 shrink-0" style={{ maxHeight: "40vh" }}>
+          <ScrollArea className="h-full max-h-[40vh]">
+            <div className="px-4 py-3">
+              <div className="flex items-center gap-1.5 mb-2">
+                <Sparkles className="w-3.5 h-3.5 text-blue-400" />
+                <span className="text-xs font-medium text-blue-400">AI Summary</span>
+              </div>
+              <div className="text-xs text-foreground/85 leading-relaxed prose prose-invert prose-xs max-w-none">
+                <Streamdown>{thread.summary}</Streamdown>
+              </div>
+            </div>
+          </ScrollArea>
         </div>
       )}
 
@@ -315,10 +345,10 @@ export function ThreadPanel({
             </div>
           ) : viewMode === "all" ? (
             emails.map((email, i) => (
-              <EmailViewer key={email.id || i} email={email} />
+              <EmailViewer key={email.id || i} email={email} defaultExpanded={i === 0} />
             ))
           ) : currentEmail ? (
-            <EmailViewer email={currentEmail} />
+            <EmailViewer email={currentEmail} defaultExpanded={true} />
           ) : null}
         </div>
       </ScrollArea>

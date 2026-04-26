@@ -17,8 +17,8 @@ A local web dashboard for reading kernel mailing list threads (BPF by default) u
 ## Prerequisites
 
 ```bash
-# Python 3.11+
-pip install b4 fastapi uvicorn anthropic openai
+# Python 3.9+
+pip install b4 fastapi uvicorn anthropic openai python-dotenv
 
 # Node.js 18+ and pnpm
 npm install -g pnpm
