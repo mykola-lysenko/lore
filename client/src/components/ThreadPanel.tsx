@@ -174,6 +174,7 @@ export function ThreadPanel({
   const [currentEmailIndex, setCurrentEmailIndex] = useState(0);
   const [viewMode, setViewMode] = useState<"all" | "single">("all");
   const [summarizing, setSummarizing] = useState(false);
+  const [summaryCollapsed, setSummaryCollapsed] = useState(false);
 
   // When the outline in the middle pane is clicked, jump to that email in single mode
   useEffect(() => {
@@ -323,21 +324,35 @@ export function ThreadPanel({
         </div>
       </div>
 
-      {/* AI Summary section — capped at 40vh, independently scrollable */}
+      {/* AI Summary section — collapsible, capped at 40vh, independently scrollable */}
       {thread.summary && (
-        <div
-          className="border-b border-border bg-blue-500/5 shrink-0 overflow-y-auto"
-          style={{ maxHeight: "40vh" }}
-        >
-          <div className="px-4 py-3">
-            <div className="flex items-center gap-1.5 mb-2">
-              <Sparkles className="w-3.5 h-3.5 text-blue-400" />
-              <span className="text-xs font-medium text-blue-400">AI Summary</span>
+        <div className="border-b border-border bg-blue-500/5 shrink-0">
+          {/* Summary header — always visible, click to collapse */}
+          <button
+            className="w-full flex items-center gap-1.5 px-4 py-2 hover:bg-blue-500/10 transition-colors text-left"
+            onClick={() => setSummaryCollapsed((v) => !v)}
+          >
+            <Sparkles className="w-3.5 h-3.5 text-blue-400 shrink-0" />
+            <span className="text-xs font-medium text-blue-400 flex-1">AI Summary</span>
+            {summaryCollapsed ? (
+              <ChevronDown className="w-3.5 h-3.5 text-blue-400/60" />
+            ) : (
+              <ChevronUp className="w-3.5 h-3.5 text-blue-400/60" />
+            )}
+          </button>
+          {/* Summary body — hidden when collapsed */}
+          {!summaryCollapsed && (
+            <div
+              className="overflow-y-auto"
+              style={{ maxHeight: "40vh" }}
+            >
+              <div className="px-4 pb-3">
+                <div className="text-xs text-foreground/85 leading-relaxed prose prose-invert prose-xs max-w-none">
+                  <Streamdown>{thread.summary}</Streamdown>
+                </div>
+              </div>
             </div>
-            <div className="text-xs text-foreground/85 leading-relaxed prose prose-invert prose-xs max-w-none">
-              <Streamdown>{thread.summary}</Streamdown>
-            </div>
-          </div>
+          )}
         </div>
       )}
 
