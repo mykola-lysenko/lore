@@ -301,7 +301,7 @@ export default function Dashboard() {
       <ResizablePanelGroup direction="horizontal" className="flex-1 overflow-hidden">
         {/* Thread list panel */}
         <ResizablePanel defaultSize={selectedThread ? 40 : 100} minSize={20}>
-          <div className="h-full overflow-hidden">
+          <div className="h-full flex flex-col overflow-hidden">
             <ThreadList
               threads={filteredThreads}
               selectedId={selectedThread?.id}
@@ -322,7 +322,7 @@ export default function Dashboard() {
           <>
             <ResizableHandle withHandle />
             <ResizablePanel defaultSize={60} minSize={25}>
-              <div className="h-full overflow-hidden">
+              <div className="h-full flex flex-col overflow-hidden">
                 <ThreadPanel
                   thread={selectedThread}
                   loading={loadingThread}
