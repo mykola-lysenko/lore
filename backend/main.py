@@ -53,6 +53,7 @@ def _find_b4_binary() -> str:
         "b4 binary not found. Install it with: pip install b4"
     )
 
+from fastapi.responses import StreamingResponse
 from fastapi import BackgroundTasks, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -299,7 +300,20 @@ def mbox_to_thread(mbox_path: Path, root_msgid: str) -> dict:
 # Thread listing from lore search
 # ---------------------------------------------------------------------------
 
+
+def parse_patch_subject(subject: str) -> tuple[int, str]:
+    """Extract version and normalized base subject from a patch subject line."""
+    m = re.match(r'^((?:\[.*?\]\s*)+)(.*)$', subject)
+    if not m:
+        return 1, subject.strip().lower()
+    prefixes = m.group(1)
+    base_subject = m.group(2).strip().lower()
+    v_match = re.search(r'\bv(\d+)\b', prefixes, re.IGNORECASE)
+    version = int(v_match.group(1)) if v_match else 1
+    return version, base_subject
+
 def fetch_thread_list(cfg: dict) -> list[dict]:
+
     """
     Use b4's search API to get thread root messages from the configured list.
     Returns a list of lightweight thread summary dicts (no full email bodies).
@@ -356,7 +370,29 @@ def fetch_thread_list(cfg: dict) -> list[dict]:
             "summary": None,
         })
 
+
+    # Group versions by normalized subject
+    groups = {}
+    for t in threads:
+        if t["type"] in ("patch", "rfc", "pull"):
+            v, base = parse_patch_subject(t["subject"])
+            t["version"] = v
+            t["_base_subject"] = base
+            groups.setdefault(base, []).append({"version": v, "id": t["id"]})
+        else:
+            t["version"] = None
+            t["versions"] = []
+
+    for t in threads:
+        if "_base_subject" in t:
+            base = t["_base_subject"]
+            # Deduplicate by version and ID just in case
+            unique_versions = {x["version"]: x for x in groups[base]}.values()
+            t["versions"] = sorted(list(unique_versions), key=lambda x: x["version"])
+            del t["_base_subject"]
+
     # Sort by date descending
+
     threads.sort(key=lambda t: t["date"] or "", reverse=True)
     return threads
 
@@ -401,12 +437,17 @@ def fetch_full_thread(msgid: str, cfg: dict) -> dict:
                     status_code=500,
                     detail=f"b4 mbox failed: {result.stderr}"
                 )
-            # b4 names the file after the message ID
-            mbox_path = THREADS_DIR / f"{msgid}.mbx"
+            # b4 names the file after the message ID, but replaces some characters
+            # Let's check both the literal ID and the sanitized one
+            mbox_path = Path(outdir) / f"{msgid}.mbx"
             if not mbox_path.exists():
-                # Try to find the file
-                for f in THREADS_DIR.glob("*.mbx"):
-                    if msgid in f.name or safe_name in f.name:
+                safe_name_b4 = msgid.replace("+", "+").replace("=", "_").replace("/", "_")
+                mbox_path = Path(outdir) / f"{safe_name_b4}.mbx"
+            
+            if not mbox_path.exists():
+                # Try to find the file by globbing
+                for f in Path(outdir).glob("*.mbx"):
+                    if safe_name in f.name or msgid[:15] in f.name:
                         mbox_path = f
                         break
 
@@ -883,6 +924,28 @@ def queue_status():
         "last_failed": _failed[-1] if _failed else None,
     }
 
+@app.get("/api/queue/stream")
+async def queue_stream():
+    """Stream queue state to the frontend via Server-Sent Events."""
+    async def event_generator():
+        last_state = None
+        while True:
+            status = {
+                "pending": len(_queue),
+                "in_progress": _in_progress,
+                "completed": len(_completed),
+                "failed": len(_failed),
+                "worker_running": _worker_running,
+                "last_completed": _completed[-1] if _completed else None,
+                "last_failed": _failed[-1] if _failed else None,
+            }
+            if status != last_state:
+                yield f"data: {json.dumps(status)}\n\n"
+                last_state = status
+            
+            await asyncio.sleep(0.5)
+
+    return StreamingResponse(event_generator(), media_type="text/event-stream")
 
 @app.delete("/api/queue/clear")
 async def clear_queue():
