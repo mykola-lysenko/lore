@@ -5,10 +5,17 @@
 
 const BASE_URL = ""; // Uses Vite proxy: /api -> http://localhost:8765/api
 
+export interface ThreadVersion {
+  version: number;
+  id: string;
+}
+
 export interface ThreadSummary {
   id: string;
   subject: string;
   type: "patch" | "rfc" | "discussion" | "pull";
+  version?: number;
+  versions?: ThreadVersion[];
   author: string;
   author_email: string;
   date: string | null;

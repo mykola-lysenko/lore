@@ -177,7 +177,7 @@ function ThreadCard({
                 getThreadTypeBadgeClass(thread.type)
               )}
             >
-              {thread.type}
+              {thread.type} {thread.version ? `v${thread.version}` : ""}
             </span>
           </div>
 

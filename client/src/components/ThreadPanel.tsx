@@ -38,6 +38,7 @@ interface ThreadPanelProps {
   onSummarize: (threadId: string, force?: boolean) => Promise<string | null>;
   initialEmailIndex?: number | null;
   onEmailIndexConsumed?: () => void;
+  onSelectVersion?: (id: string) => void;
 }
 
 function renderEmailLine(line: string, idx: number) {
@@ -170,6 +171,7 @@ export function ThreadPanel({
   onSummarize,
   initialEmailIndex,
   onEmailIndexConsumed,
+  onSelectVersion,
 }: ThreadPanelProps) {
   const [currentEmailIndex, setCurrentEmailIndex] = useState(0);
   const [viewMode, setViewMode] = useState<"all" | "single">("all");
@@ -210,6 +212,26 @@ export function ThreadPanel({
               >
                 {thread.type}
               </span>
+              
+              {thread.versions && thread.versions.length > 1 && (
+                <div className="flex items-center gap-1 ml-2 text-xs">
+                  <span className="text-muted-foreground">Versions:</span>
+                  {thread.versions.map(v => (
+                    <button
+                      key={v.version}
+                      onClick={() => onSelectVersion?.(v.id)}
+                      className={cn(
+                        "px-1.5 py-0.5 rounded font-mono transition-colors border",
+                        v.id === thread.id
+                          ? "bg-blue-500/20 text-blue-400 border-blue-500/30 font-medium"
+                          : "bg-muted text-muted-foreground border-transparent hover:bg-accent hover:text-foreground"
+                      )}
+                    >
+                      v{v.version}
+                    </button>
+                  ))}
+                </div>
+              )}
               <a
                 href={thread.lore_url}
                 target="_blank"
