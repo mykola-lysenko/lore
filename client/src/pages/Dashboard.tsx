@@ -94,12 +94,16 @@ export default function Dashboard() {
     api.enqueueForSummary(toEnqueue).catch(() => {});
   }, [filteredThreads, backendOnline]);
 
-  // Poll queue status while worker is running; stop when idle
+  // Stream queue status using Server-Sent Events (SSE)
   const startPolling = useCallback(() => {
-    if (pollRef.current) return; // already polling
-    pollRef.current = setInterval(async () => {
+    if (pollRef.current) return; // already streaming
+    
+    // Uses the proxy in vite.config.ts if available, or relative path
+    const es = new EventSource('/api/queue/stream');
+    
+    es.onmessage = (event) => {
       try {
-        const status = await api.getQueueStatus();
+        const status = JSON.parse(event.data);
         setQueueState(status);
 
         // If a thread just completed, refresh its summary in the list
@@ -124,24 +128,23 @@ export default function Dashboard() {
           );
         }
 
-        // Stop polling when queue is drained
+        // Stop streaming when queue is drained
         if (!status.worker_running && status.pending === 0) {
-          if (pollRef.current) {
-            clearInterval(pollRef.current);
-            pollRef.current = null;
-          }
-        }
-      } catch {
-        // backend offline — stop polling
-        if (pollRef.current) {
-          clearInterval(pollRef.current);
+          es.close();
           pollRef.current = null;
         }
-      }
-    }, 3000);
+      } catch (e) {}
+    };
+
+    es.onerror = () => {
+      es.close();
+      pollRef.current = null;
+    };
+
+    pollRef.current = es as any;
   }, []);
 
-  // Start polling whenever we enqueue something
+  // Start streaming whenever we enqueue something
   useEffect(() => {
     if (!backendOnline) return;
     if (filteredThreads.some((t) => !t.summary)) {
@@ -149,7 +152,7 @@ export default function Dashboard() {
     }
     return () => {
       if (pollRef.current) {
-        clearInterval(pollRef.current);
+        (pollRef.current as unknown as EventSource).close();
         pollRef.current = null;
       }
     };
@@ -178,7 +181,7 @@ export default function Dashboard() {
       const thread = await api.getThread(summary.id);
       // Attach any already-fetched summary
       const existing = threads.find((t) => t.id === summary.id);
-      setSelectedThread({ ...thread, summary: existing?.summary ?? thread.summary });
+      setSelectedThread({ ...thread, summary: existing?.summary ?? thread.summary, versions: existing?.versions });
       // Mark thread as read
       if (!summary.is_read) {
         api.markRead([summary.id]).catch(() => {});
@@ -239,6 +242,20 @@ export default function Dashboard() {
     }
   }, [loadThreads]);
 
+
+  const handleSelectVersion = useCallback((id: string) => {
+    const t = threads.find(x => x.id === id);
+    if (t) {
+      handleSelectThread(t);
+    } else {
+      // Fetch thread directly if not in current view
+      toast.info("Fetching older version...");
+      api.getThread(id).then(thread => {
+         setSelectedThread(thread);
+      }).catch(err => toast.error(`Failed to load version: ${err instanceof Error ? err.message : String(err)}`));
+    }
+  }, [threads, handleSelectThread]);
+
   const handleCloseThread = useCallback(() => {
     setSelectedThread(null);
   }, []);
@@ -259,7 +276,7 @@ export default function Dashboard() {
     try {
       await api.clearQueue();
       if (pollRef.current) {
-        clearInterval(pollRef.current);
+        (pollRef.current as unknown as EventSource).close();
         pollRef.current = null;
       }
       setQueueState(null);
@@ -330,6 +347,7 @@ export default function Dashboard() {
                   onSummarize={handleSummarize}
                   initialEmailIndex={selectedEmailIndex}
                   onEmailIndexConsumed={() => setSelectedEmailIndex(null)}
+                  onSelectVersion={handleSelectVersion}
                 />
               </div>
             </ResizablePanel>
