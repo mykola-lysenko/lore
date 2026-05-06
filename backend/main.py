@@ -871,6 +871,47 @@ def get_thread(thread_id: str):
     return thread
 
 
+
+@app.get("/api/threads/{thread_id:path}/diff")
+def get_thread_diff(thread_id: str, v1: int, v2: int):
+    """
+    Generate a range-diff between two versions of a patch series using b4 diff.
+    """
+    cfg = load_config()
+    setup_b4_config(cfg)
+    
+    try:
+        # We enforce color output via b4, but strip the ANSI codes so the frontend 
+        # can do its own CSS-based semantic coloring using our existing renderEmailLine.
+        # However, to be safe across environments, we just omit -c and get raw text diff.
+        result = subprocess.run(
+            [B4_BIN, "diff", thread_id, "-v", str(v1), str(v2)],
+            capture_output=True,
+            text=True,
+            timeout=120,
+        )
+        
+        if result.returncode != 0:
+            err = result.stderr.strip()
+            # Common b4 diff errors
+            if "not find" in err or "missing" in err:
+                raise HTTPException(status_code=404, detail=f"Could not find patches to compare: {err}")
+            raise HTTPException(status_code=500, detail=f"b4 diff failed: {err or result.stdout}")
+            
+        output = result.stdout.strip()
+        if not output:
+            output = "No differences found between these versions."
+            
+        return {"diff": output}
+        
+    except subprocess.TimeoutExpired:
+        raise HTTPException(status_code=504, detail="b4 diff timed out after 2 minutes.")
+    except Exception as e:
+        if isinstance(e, HTTPException):
+            raise e
+        logger.exception(f"b4 diff error for {thread_id}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.post("/api/summarize")
 def summarize_thread(req: SummarizeRequest):
     """

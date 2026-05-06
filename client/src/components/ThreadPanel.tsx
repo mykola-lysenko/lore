@@ -174,7 +174,43 @@ export function ThreadPanel({
   onSelectVersion,
 }: ThreadPanelProps) {
   const [currentEmailIndex, setCurrentEmailIndex] = useState(0);
-  const [viewMode, setViewMode] = useState<"all" | "single">("all");
+  const [viewMode, setViewMode] = useState<"all" | "single" | "compare">("all");
+  const [compareV1, setCompareV1] = useState<number | null>(null);
+  const [compareV2, setCompareV2] = useState<number | null>(null);
+  const [diffText, setDiffText] = useState<string | null>(null);
+  const [diffLoading, setDiffLoading] = useState(false);
+  const [diffError, setDiffError] = useState<string | null>(null);
+
+  // Initialize compare versions automatically when toggling compare mode
+  useEffect(() => {
+    if (viewMode === "compare" && thread.versions && thread.versions.length >= 2) {
+      if (compareV1 === null || compareV2 === null) {
+        // default to latest and one before latest
+        const sorted = [...thread.versions].sort((a, b) => a.version - b.version);
+        setCompareV1(sorted[sorted.length - 2].version);
+        setCompareV2(sorted[sorted.length - 1].version);
+      }
+    }
+  }, [viewMode, thread.versions, compareV1, compareV2]);
+
+  // Fetch diff when versions change
+  useEffect(() => {
+    if (viewMode === "compare" && compareV1 !== null && compareV2 !== null) {
+      setDiffLoading(true);
+      setDiffError(null);
+      
+      // Look up the msgid of the newer version to use as the base target for b4
+      const v2Obj = thread.versions?.find(v => v.version === compareV2);
+      const targetId = v2Obj ? v2Obj.id : thread.id;
+
+      import("@/lib/api").then(({ api }) => {
+        api.getThreadDiff(targetId, compareV1, compareV2)
+          .then(res => setDiffText(res.diff))
+          .catch(err => setDiffError(err instanceof Error ? err.message : String(err)))
+          .finally(() => setDiffLoading(false));
+      });
+    }
+  }, [viewMode, compareV1, compareV2, thread.id, thread.versions]);
   const [summarizing, setSummarizing] = useState(false);
   const [summaryCollapsed, setSummaryCollapsed] = useState(false);
 
@@ -291,6 +327,19 @@ export function ThreadPanel({
             >
               Single
             </button>
+            {thread.versions && thread.versions.length > 1 && (
+              <button
+                className={cn(
+                  "px-2.5 py-1 border-l border-border transition-colors",
+                  viewMode === "compare"
+                    ? "bg-accent text-foreground"
+                    : "text-muted-foreground hover:text-foreground"
+                )}
+                onClick={() => setViewMode("compare")}
+              >
+                Compare
+              </button>
+            )}
           </div>
 
           {viewMode === "single" && (
@@ -384,6 +433,52 @@ export function ThreadPanel({
           {loading ? (
             <div className="flex items-center justify-center py-12">
               <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+            </div>
+          ) : viewMode === "compare" ? (
+            <div className="flex flex-col h-full bg-card border border-border rounded-md overflow-hidden">
+              <div className="px-4 py-2 border-b border-border bg-muted/30 flex items-center gap-3 text-xs shrink-0">
+                <span className="text-muted-foreground font-medium">Range-diff</span>
+                <select 
+                  className="bg-input border border-border rounded px-1.5 py-0.5 text-foreground font-mono"
+                  value={compareV1 || ""}
+                  onChange={e => setCompareV1(Number(e.target.value))}
+                >
+                  {thread.versions?.map(v => (
+                    <option key={v.version} value={v.version} disabled={v.version >= (compareV2 || 999)}>
+                      v{v.version}
+                    </option>
+                  ))}
+                </select>
+                <span className="text-muted-foreground">..</span>
+                <select 
+                  className="bg-input border border-border rounded px-1.5 py-0.5 text-foreground font-mono"
+                  value={compareV2 || ""}
+                  onChange={e => setCompareV2(Number(e.target.value))}
+                >
+                  {thread.versions?.map(v => (
+                    <option key={v.version} value={v.version} disabled={v.version <= (compareV1 || 0)}>
+                      v{v.version}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="flex-1 overflow-y-auto p-4 text-[13px] font-mono leading-relaxed bg-black/40">
+                {diffLoading ? (
+                  <div className="flex flex-col items-center justify-center py-12 space-y-3">
+                    <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
+                    <p className="text-xs text-muted-foreground">Computing range-diff via b4...</p>
+                  </div>
+                ) : diffError ? (
+                  <div className="p-4 bg-red-500/10 border border-red-500/20 rounded text-red-400">
+                    <p className="font-medium mb-1">Failed to generate diff</p>
+                    <p className="text-xs opacity-80 font-mono whitespace-pre-wrap">{diffError}</p>
+                  </div>
+                ) : diffText ? (
+                  <div className="whitespace-pre-wrap">
+                    {diffText.split("\n").map((line, i) => renderEmailLine(line, i))}
+                  </div>
+                ) : null}
+              </div>
             </div>
           ) : viewMode === "all" ? (
             emails.map((email, i) => (

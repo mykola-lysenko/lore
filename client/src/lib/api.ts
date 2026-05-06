@@ -98,6 +98,9 @@ export const api = {
   getThread: (threadId: string) =>
     request<Thread>(`/api/threads/${encodeURIComponent(threadId)}`),
 
+  getThreadDiff: (threadId: string, v1: number, v2: number) =>
+    request<{ diff: string }>(`/api/threads/${encodeURIComponent(threadId)}/diff?v1=${v1}&v2=${v2}`),
+
   summarize: (threadId: string, force = false) =>
     request<{ summary: string; cached: boolean }>("/api/summarize", {
       method: "POST",
