@@ -46,6 +46,7 @@ interface SidebarProps {
   onFilterType: (type: string) => void;
   searchQuery: string;
   onSearchQuery: (q: string) => void;
+  onSearchSubmit?: (q: string) => void;
   threadCounts: Record<string, number>;
   unreadCount: number;
   backendOnline: boolean;
@@ -98,6 +99,7 @@ export function Sidebar({
   onFilterType,
   searchQuery,
   onSearchQuery,
+  onSearchSubmit,
   threadCounts,
   unreadCount,
   backendOnline,
@@ -200,6 +202,11 @@ export function Sidebar({
                 placeholder="Search threads..."
                 value={searchQuery}
                 onChange={(e) => onSearchQuery(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && onSearchSubmit) {
+                    onSearchSubmit(searchQuery);
+                  }
+                }}
                 className="pl-7 h-7 text-xs bg-input border-border"
               />
             </div>

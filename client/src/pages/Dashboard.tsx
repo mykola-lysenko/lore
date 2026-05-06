@@ -175,6 +175,63 @@ export default function Dashboard() {
     }
   }, []);
 
+
+  const handleSearchSubmit = useCallback(async (query: string) => {
+    const q = query.trim();
+    if (!q) return;
+
+    let msgId = "";
+    
+    // Check if it's a Lore URL
+    const loreMatch = q.match(/lore\.kernel\.org\/[^/]+\/([^/#?]+)/);
+    if (loreMatch) {
+      msgId = decodeURIComponent(loreMatch[1]);
+    } else if (q.includes('@') && !q.includes(' ')) {
+      // Looks like a raw Message-ID
+      msgId = q.replace(/^</, '').replace(/>$/, '');
+    }
+
+    if (msgId) {
+      // Clear search to unhide the list
+      setSearchQuery("");
+      toast.info("Fetching thread from lore...");
+      
+      try {
+        const thread = await api.getThread(msgId);
+        
+        setThreads(prev => {
+          // Check if we already have it
+          const exists = prev.find(t => t.id === thread.id);
+          if (exists) return prev;
+          
+          // Construct a summary to put at the top of the list
+          const summary: ThreadSummary = {
+            id: thread.id,
+            subject: thread.subject,
+            type: thread.type,
+            author: thread.author,
+            author_email: thread.author_email,
+            date: thread.date,
+            last_activity: thread.last_activity,
+            message_count: thread.message_count,
+            participant_count: thread.participant_count,
+            lore_url: thread.lore_url,
+            has_full_thread: true,
+            summary: thread.summary,
+            is_read: true,
+            version: thread.version,
+            versions: thread.versions,
+          };
+          return [summary, ...prev];
+        });
+        
+        setSelectedThread(thread);
+      } catch (err: unknown) {
+        toast.error(`Failed to load thread: ${err instanceof Error ? err.message : String(err)}`);
+      }
+    }
+  }, []);
+
   const handleSelectThread = useCallback(async (summary: ThreadSummary) => {
     setLoadingThread(true);
     try {
@@ -298,6 +355,7 @@ export default function Dashboard() {
         onFilterType={setFilterType}
         searchQuery={searchQuery}
         onSearchQuery={setSearchQuery}
+        onSearchSubmit={handleSearchSubmit}
         threadCounts={{
           all: threads.length,
           patch: threads.filter((t) => t.type === "patch").length,
