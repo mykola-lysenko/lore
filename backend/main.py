@@ -239,6 +239,13 @@ def msg_to_dict(msg, thread_id: str, index: int) -> dict:
     if not from_name:
         from_name = from_email.split("@")[0] if from_email else "Unknown"
 
+    in_reply_to = clean_msgid(msg.get("In-Reply-To", "") or "")
+    if not in_reply_to:
+        refs = msg.get("References", "") or ""
+        ref_list = re.findall(r'<([^>]+)>', refs)
+        if ref_list:
+            in_reply_to = clean_msgid(ref_list[-1])
+
     return {
         "id": msgid or f"{thread_id}-{index}",
         "thread_id": thread_id,
@@ -246,7 +253,7 @@ def msg_to_dict(msg, thread_id: str, index: int) -> dict:
         "from_name": from_name,
         "from_email": from_email,
         "date": parse_date(msg.get("Date")),
-        "in_reply_to": clean_msgid(msg.get("In-Reply-To", "") or ""),
+        "in_reply_to": in_reply_to,
         "body": extract_email_body(msg),
         "lore_url": f"https://lore.kernel.org/all/{urllib.parse.quote(msgid)}/",
         "index": index,
@@ -263,15 +270,23 @@ def mbox_to_thread(mbox_path: Path, root_msgid: str) -> dict:
         return {}
 
     emails = [msg_to_dict(m, root_msgid, i) for i, m in enumerate(messages)]
+    
+    # Sort chronologically to present readable thread and help finding true root
+    emails.sort(key=lambda x: x["date"] or "")
 
-    # Find the root message (no In-Reply-To, or matches root_msgid)
-    root = None
-    for e in emails:
-        if not e["in_reply_to"] or e["id"] == root_msgid:
-            root = e
-            break
-    if root is None:
-        root = emails[0]
+    # Find the true root of the thread (walk up In-Reply-To chain)
+    email_ids = {e["id"] for e in emails}
+    requested_msg = next((e for e in emails if e["id"] == root_msgid), None)
+    
+    current = requested_msg if requested_msg else emails[0]
+    seen = set()
+    while current["in_reply_to"] in email_ids:
+        if current["id"] in seen:
+            break  # Prevent infinite loop on malformed headers
+        seen.add(current["id"])
+        current = next(e for e in emails if e["id"] == current["in_reply_to"])
+        
+    root = current
 
     subject = root["subject"]
     thread_type = classify_thread(subject)
@@ -280,7 +295,7 @@ def mbox_to_thread(mbox_path: Path, root_msgid: str) -> dict:
     participants = list({e["from_email"] for e in emails})
 
     return {
-        "id": root_msgid,
+        "id": root["id"],
         "subject": subject,
         "type": thread_type,
         "author": root["from_name"],

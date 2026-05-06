@@ -199,6 +199,11 @@ export default function Dashboard() {
       try {
         const thread = await api.getThread(msgId);
         
+        const targetIndex = thread.emails?.findIndex(e => e.id === msgId) ?? -1;
+        if (targetIndex > 0) {
+            setSelectedEmailIndex(targetIndex);
+        }
+
         setThreads(prev => {
           // Check if we already have it
           const exists = prev.find(t => t.id === thread.id);
