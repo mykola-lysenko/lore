@@ -29,6 +29,11 @@ from typing import Any, Optional
 
 import b4
 import requests
+import logging
+
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+logger = logging.getLogger(__name__)
+
 
 # ---------------------------------------------------------------------------
 # Resolve the b4 binary: prefer the one next to this Python interpreter
@@ -242,7 +247,7 @@ def msg_to_dict(msg, thread_id: str, index: int) -> dict:
         "date": parse_date(msg.get("Date")),
         "in_reply_to": clean_msgid(msg.get("In-Reply-To", "") or ""),
         "body": extract_email_body(msg),
-        "lore_url": f"https://lore.kernel.org/bpf/{urllib.parse.quote(msgid)}/",
+        "lore_url": f"https://lore.kernel.org/all/{urllib.parse.quote(msgid)}/",
         "index": index,
     }
 
@@ -284,7 +289,7 @@ def mbox_to_thread(mbox_path: Path, root_msgid: str) -> dict:
         "message_count": len(emails),
         "participants": participants,
         "participant_count": len(participants),
-        "lore_url": f"https://lore.kernel.org/bpf/{urllib.parse.quote(root_msgid)}/",
+        "lore_url": f"https://lore.kernel.org/all/{urllib.parse.quote(root_msgid)}/",
         "emails": emails,
         "mbox_path": str(mbox_path),
     }
@@ -346,7 +351,7 @@ def fetch_thread_list(cfg: dict) -> list[dict]:
             "last_activity": parse_date(msg.get("Date")),
             "message_count": 1,  # will be updated when thread is fetched
             "participant_count": 1,
-            "lore_url": f"https://lore.kernel.org/bpf/{urllib.parse.quote(msgid)}/",
+            "lore_url": f"https://lore.kernel.org/all/{urllib.parse.quote(msgid)}/",
             "has_full_thread": False,
             "summary": None,
         })
@@ -683,6 +688,7 @@ async def _summarize_worker():
                 else:
                     _completed.append(thread_id)
             except Exception as e:
+                logger.exception(f"Background summarization failed for thread {thread_id}: {e}")
                 _failed.append(thread_id)
             finally:
                 _in_progress = None
@@ -763,7 +769,7 @@ def list_threads(refresh: bool = False):
 
     if not refresh and cache_file.exists():
         age = time.time() - cache_file.stat().st_mtime
-        if age < 86400:  # 24-hour cache — avoids re-fetching on every restart
+        if age < 600:  # 10-minute cache — avoids re-fetching on every restart
             with open(cache_file) as f:
                 threads = json.load(f)
             # Merge in any saved summaries and read state

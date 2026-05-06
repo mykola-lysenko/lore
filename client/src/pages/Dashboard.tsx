@@ -165,8 +165,8 @@ export default function Dashboard() {
         enqueuedRef.current = new Set();
         toast.success(`Loaded ${data.count} threads`);
       }
-    } catch (err: any) {
-      toast.error(`Failed to load threads: ${err.message}`);
+    } catch (err: unknown) {
+      toast.error(`Failed to load threads: ${err instanceof Error ? err.message : String(err)}`);
     } finally {
       setLoadingThreads(false);
     }
@@ -196,8 +196,8 @@ export default function Dashboard() {
             : t
         )
       );
-    } catch (err: any) {
-      toast.error(`Failed to load thread: ${err.message}`);
+    } catch (err: unknown) {
+      toast.error(`Failed to load thread: ${err instanceof Error ? err.message : String(err)}`);
     } finally {
       setLoadingThread(false);
     }
@@ -216,8 +216,8 @@ export default function Dashboard() {
           prev?.id === threadId ? { ...prev, summary: result.summary } : prev
         );
         return result.summary;
-      } catch (err: any) {
-        toast.error(`Summarization failed: ${err.message}`);
+      } catch (err: unknown) {
+        toast.error(`Summarization failed: ${err instanceof Error ? err.message : String(err)}`);
         return null;
       }
     },
@@ -234,8 +234,8 @@ export default function Dashboard() {
         await api.clearCache();
         await loadThreads(true);
       }
-    } catch (err: any) {
-      toast.error(`Failed to save settings: ${err.message}`);
+    } catch (err: unknown) {
+      toast.error(`Failed to save settings: ${err instanceof Error ? err.message : String(err)}`);
     }
   }, [loadThreads]);
 
@@ -250,8 +250,8 @@ export default function Dashboard() {
       await api.markRead(unreadIds);
       setThreads((prev) => prev.map((t) => ({ ...t, is_read: true })));
       toast.success(`Marked ${unreadIds.length} threads as read`);
-    } catch (err: any) {
-      toast.error(`Failed to mark as read: ${err.message}`);
+    } catch (err: unknown) {
+      toast.error(`Failed to mark as read: ${err instanceof Error ? err.message : String(err)}`);
     }
   }, [threads]);
 
@@ -264,8 +264,8 @@ export default function Dashboard() {
       }
       setQueueState(null);
       toast.info("Background summarization cancelled");
-    } catch (err: any) {
-      toast.error(`Failed to cancel queue: ${err.message}`);
+    } catch (err: unknown) {
+      toast.error(`Failed to cancel queue: ${err instanceof Error ? err.message : String(err)}`);
     }
   }, []);
 
