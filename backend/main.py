@@ -855,20 +855,7 @@ def list_threads(refresh: bool = False):
     return {"threads": threads, "cached": False, "count": len(threads)}
 
 
-@app.get("/api/threads/{thread_id:path}")
-def get_thread(thread_id: str):
-    """
-    Fetch the full thread (all emails) for a given message ID.
-    Downloads via b4 mbox if not already cached.
-    """
-    cfg = load_config()
-    thread = fetch_full_thread(thread_id, cfg)
 
-    # Attach summary if available
-    summaries = load_summaries()
-    thread["summary"] = summaries.get(thread_id)
-
-    return thread
 
 
 
@@ -911,6 +898,21 @@ def get_thread_diff(thread_id: str, v1: int, v2: int):
             raise e
         logger.exception(f"b4 diff error for {thread_id}")
         raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/threads/{thread_id:path}")
+def get_thread(thread_id: str):
+    """
+    Fetch the full thread (all emails) for a given message ID.
+    Downloads via b4 mbox if not already cached.
+    """
+    cfg = load_config()
+    thread = fetch_full_thread(thread_id, cfg)
+
+    # Attach summary if available
+    summaries = load_summaries()
+    thread["summary"] = summaries.get(thread_id)
+
+    return thread
 
 @app.post("/api/summarize")
 def summarize_thread(req: SummarizeRequest):
