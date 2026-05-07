@@ -883,6 +883,15 @@ def get_thread_diff(thread_id: str, v1: int, v2: int):
             # Common b4 diff errors
             if "not find" in err or "missing" in err:
                 raise HTTPException(status_code=404, detail=f"Could not find patches to compare: {err}")
+            if "fake-am" in err:
+                msg = (
+                    "b4 diff requires applying patches to a local git tree (fake-am).\n"
+                    "Because this dashboard is not running inside the kernel repository, "
+                    "b4 could not resolve the files being patched.\n\n"
+                    f"Details:\n{err}"
+                )
+                raise HTTPException(status_code=400, detail=msg)
+                
             raise HTTPException(status_code=500, detail=f"b4 diff failed: {err or result.stdout}")
             
         output = result.stdout.strip()
