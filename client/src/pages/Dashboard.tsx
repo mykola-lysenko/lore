@@ -348,6 +348,74 @@ export default function Dashboard() {
     }
   }, []);
 
+
+  // Global Keyboard Navigation
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Ignore if user is typing in an input or textarea
+      if (
+        document.activeElement?.tagName === "INPUT" ||
+        document.activeElement?.tagName === "TEXTAREA" ||
+        e.ctrlKey || e.metaKey || e.altKey
+      ) {
+        return;
+      }
+
+      switch (e.key) {
+        case "j": {
+          e.preventDefault();
+          if (filteredThreads.length === 0) return;
+          if (!selectedThread) {
+            handleSelectThread(filteredThreads[0]);
+            return;
+          }
+          const idx = filteredThreads.findIndex(t => t.id === selectedThread.id);
+          if (idx < filteredThreads.length - 1) {
+            handleSelectThread(filteredThreads[idx + 1]);
+          }
+          break;
+        }
+        case "k": {
+          e.preventDefault();
+          if (filteredThreads.length === 0) return;
+          if (!selectedThread) {
+            handleSelectThread(filteredThreads[0]);
+            return;
+          }
+          const idx = filteredThreads.findIndex(t => t.id === selectedThread.id);
+          if (idx > 0) {
+            handleSelectThread(filteredThreads[idx - 1]);
+          }
+          break;
+        }
+        case "s": {
+          if (selectedThread) {
+            e.preventDefault();
+            handleSummarize(selectedThread.id, !!selectedThread.summary);
+          }
+          break;
+        }
+        case "/": {
+          e.preventDefault();
+          const searchInput = document.querySelector('input[placeholder="Search threads..."]') as HTMLInputElement;
+          searchInput?.focus();
+          break;
+        }
+        case "Escape": {
+          if (document.activeElement?.tagName === "INPUT") {
+             (document.activeElement as HTMLInputElement).blur();
+          } else if (selectedThread) {
+             handleCloseThread();
+          }
+          break;
+        }
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [filteredThreads, selectedThread, handleSelectThread, handleSummarize, handleCloseThread]);
+
   return (
     <div className="flex h-screen overflow-hidden bg-background text-foreground">
       {/* Left Sidebar — fixed width, not part of resizable group */}
