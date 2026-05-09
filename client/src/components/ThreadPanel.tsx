@@ -30,6 +30,10 @@ import {
   ChevronUp,
 } from "lucide-react";
 import { Streamdown } from "streamdown";
+import { type ThreadComment, api } from "@/lib/api";
+import { ReplyDialog } from "./ReplyDialog";
+import { MessageSquarePlus, Trash2 } from "lucide-react";
+import { toast } from "sonner";
 
 interface ThreadPanelProps {
   thread: Thread;
@@ -41,27 +45,132 @@ interface ThreadPanelProps {
   onSelectVersion?: (id: string) => void;
 }
 
-function renderEmailLine(line: string, idx: number) {
-  // Diff additions
-  if (line.startsWith('+') && !line.startsWith('+++')) {
-    return <div key={idx} className="text-emerald-400 bg-emerald-500/5">{line}</div>;
-  }
-  // Diff deletions
-  if (line.startsWith('-') && !line.startsWith('---')) {
-    return <div key={idx} className="text-red-400 bg-red-500/5">{line}</div>;
-  }
-  // Diff hunk headers
-  if (line.startsWith('@@')) {
-    return <div key={idx} className="text-cyan-400 bg-cyan-500/5">{line}</div>;
-  }
-  // Diff file headers
-  if (line.startsWith('diff --git') || line.startsWith('index ') || line.startsWith('--- ') || line.startsWith('+++ ')) {
-    return <div key={idx} className="text-muted-foreground">{line}</div>;
-  }
-  return <div key={idx}>{line}</div>;
+function EmailLine({ 
+  line, 
+  idx, 
+  msgId,
+  threadId,
+  comments,
+  onCommentAdded,
+  onCommentDeleted,
+  readonly = false
+}: { 
+  line: string; 
+  idx: number; 
+  msgId: string;
+  threadId: string;
+  comments: ThreadComment[];
+  onCommentAdded: (c: ThreadComment) => void;
+  onCommentDeleted: (id: string) => void;
+  readonly?: boolean;
+}) {
+  const [isEditing, setIsEditing] = useState(false);
+  const [draft, setDraft] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  const lineComments = comments.filter(c => c.line_index === idx);
+
+  const handleSave = async () => {
+    if (!draft.trim()) return;
+    setSaving(true);
+    try {
+      const c = await api.addComment(threadId, msgId, idx, line.trim(), draft.trim());
+      onCommentAdded(c);
+      setIsEditing(false);
+      setDraft("");
+    } catch (err: unknown) {
+      toast.error(`Failed to save comment: ${err instanceof Error ? err.message : String(err)}`);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+    try {
+      await api.deleteComment(threadId, id);
+      onCommentDeleted(id);
+    } catch (err: unknown) {
+      toast.error(`Failed to delete comment: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  };
+
+  let contentClass = "";
+  if (line.startsWith('+') && !line.startsWith('+++')) contentClass = "text-emerald-400 bg-emerald-500/5";
+  else if (line.startsWith('-') && !line.startsWith('---')) contentClass = "text-red-400 bg-red-500/5";
+  else if (line.startsWith('@@')) contentClass = "text-cyan-400 bg-cyan-500/5";
+  else if (line.startsWith('diff --git') || line.startsWith('index ') || line.startsWith('--- ') || line.startsWith('+++ ')) contentClass = "text-muted-foreground";
+
+  return (
+    <div className="group relative">
+      <div className={cn("pr-2 min-h-[20px] whitespace-pre-wrap", contentClass)}>{line || " "}</div>
+      
+      {!readonly && !isEditing && (
+        <button
+          onClick={() => setIsEditing(true)}
+          className="absolute -left-6 top-0 opacity-0 group-hover:opacity-100 p-1 text-muted-foreground hover:text-blue-400 transition-colors bg-background"
+          title="Add comment"
+        >
+          <MessageSquarePlus className="w-3.5 h-3.5" />
+        </button>
+      )}
+
+      {isEditing && (
+        <div className="my-2 ml-4 p-3 bg-card border border-blue-500/30 rounded-md shadow-sm z-10 relative">
+          <textarea
+            autoFocus
+            className="w-full bg-input/50 border border-border rounded p-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-blue-500 resize-none font-sans"
+            rows={3}
+            placeholder="Leave a comment..."
+            value={draft}
+            onChange={e => setDraft(e.target.value)}
+            onKeyDown={e => {
+              if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) handleSave();
+              if (e.key === "Escape") setIsEditing(false);
+            }}
+          />
+          <div className="flex justify-end gap-2 mt-2">
+            <Button size="sm" variant="ghost" onClick={() => setIsEditing(false)} disabled={saving}>Cancel</Button>
+            <Button size="sm" onClick={handleSave} disabled={saving || !draft.trim()}>
+              {saving ? "Saving..." : "Comment"}
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {lineComments.length > 0 && (
+        <div className="my-1 ml-4 space-y-2 relative z-10">
+          {lineComments.map(c => (
+            <div key={c.id} className="p-3 bg-blue-500/10 border border-blue-500/20 rounded-md group/comment relative">
+              <div className="text-sm text-foreground whitespace-pre-wrap font-sans">{c.comment}</div>
+              <button
+                onClick={() => handleDelete(c.id)}
+                className="absolute top-2 right-2 opacity-0 group-hover/comment:opacity-100 p-1 text-red-400/70 hover:text-red-400 transition-colors"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 }
 
-function EmailViewer({ email, defaultExpanded = false }: { email: EmailMessage; defaultExpanded?: boolean }) {
+function EmailViewer({ 
+  threadId,
+  email, 
+  comments,
+  onCommentAdded,
+  onCommentDeleted,
+  defaultExpanded = false 
+}: { 
+  threadId: string;
+  email: EmailMessage; 
+  comments: ThreadComment[];
+  onCommentAdded: (c: ThreadComment) => void;
+  onCommentDeleted: (id: string) => void;
+  defaultExpanded?: boolean; 
+}) {
   const [bodyExpanded, setBodyExpanded] = useState(defaultExpanded);
   const segments = parseEmailBody(email.body);
   const initials = getInitials(email.from_name);
@@ -101,16 +210,30 @@ function EmailViewer({ email, defaultExpanded = false }: { email: EmailMessage; 
             <span className="text-xs text-muted-foreground truncate">
               {email.from_email}
             </span>
-            <a
-              href={email.lore_url}
-              target="_blank"
-              rel="noopener noreferrer"
-              onClick={(e) => e.stopPropagation()}
-              className="flex items-center gap-0.5 text-[11px] text-muted-foreground hover:text-blue-400 transition-colors ml-auto shrink-0"
-            >
-              <ExternalLink className="w-3 h-3" />
-              lore
-            </a>
+            <div className="ml-auto flex items-center gap-3 shrink-0">
+              {comments.length > 0 && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    document.dispatchEvent(new CustomEvent("open-reply-dialog", { detail: email.id }));
+                  }}
+                  className="flex items-center gap-1 text-[11px] text-blue-400 hover:text-blue-300 font-medium transition-colors bg-blue-500/10 px-2 py-0.5 rounded border border-blue-500/20"
+                >
+                  <MessageSquarePlus className="w-3 h-3" />
+                  Draft Reply ({comments.length})
+                </button>
+              )}
+              <a
+                href={email.lore_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={(e) => e.stopPropagation()}
+                className="flex items-center gap-0.5 text-[11px] text-muted-foreground hover:text-blue-400 transition-colors"
+              >
+                <ExternalLink className="w-3 h-3" />
+                lore
+              </a>
+            </div>
           </div>
           {email.subject && (
             <p className="text-xs text-muted-foreground mt-0.5 truncate">
@@ -139,8 +262,10 @@ function EmailViewer({ email, defaultExpanded = false }: { email: EmailMessage; 
           <div className="overflow-y-auto" style={{ maxHeight: "60vh" }}>
             <div className="px-4 py-3">
               <div className="email-body text-foreground/85">
-                {segments.map((seg, i) =>
-                  seg.type === "quoted" ? (
+                {segments.map((seg, i) => {
+                  const offset = segments.slice(0, i).reduce((acc, s) => acc + s.text.split("\n").length, 0);
+                  
+                  return seg.type === "quoted" ? (
                     <div
                       key={i}
                       className="border-l-2 border-border pl-3 text-muted-foreground my-1"
@@ -150,11 +275,22 @@ function EmailViewer({ email, defaultExpanded = false }: { email: EmailMessage; 
                       ))}
                     </div>
                   ) : (
-                    <div key={i}>
-                      {seg.text.split("\n").map((line, j) => renderEmailLine(line, j))}
+                    <div key={i} className="pl-6">
+                      {seg.text.split("\n").map((line, j) => (
+                        <EmailLine 
+                          key={offset + j} 
+                          line={line} 
+                          idx={offset + j} 
+                          msgId={email.id}
+                          threadId={threadId}
+                          comments={comments}
+                          onCommentAdded={onCommentAdded}
+                          onCommentDeleted={onCommentDeleted}
+                        />
+                      ))}
                     </div>
-                  )
-                )}
+                  );
+                })}
               </div>
             </div>
           </div>
@@ -213,6 +349,38 @@ export function ThreadPanel({
   }, [viewMode, compareV1, compareV2, thread.id, thread.versions]);
   const [summarizing, setSummarizing] = useState(false);
   const [summaryCollapsed, setSummaryCollapsed] = useState(false);
+  const [replyDialogOpen, setReplyDialogOpen] = useState(false);
+  const [replyTargetId, setReplyTargetId] = useState<string | null>(null);
+  
+  const [localComments, setLocalComments] = useState<Record<string, ThreadComment[]>>(thread.comments || {});
+
+  useEffect(() => {
+    setLocalComments(thread.comments || {});
+  }, [thread.comments]);
+
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const msgId = (e as CustomEvent).detail;
+      setReplyTargetId(msgId);
+      setReplyDialogOpen(true);
+    };
+    document.addEventListener("open-reply-dialog", handler);
+    return () => document.removeEventListener("open-reply-dialog", handler);
+  }, []);
+
+  const handleAddComment = (msgId: string, c: ThreadComment) => {
+    setLocalComments(prev => ({
+      ...prev,
+      [msgId]: [...(prev[msgId] || []), c]
+    }));
+  };
+
+  const handleDeleteComment = (msgId: string, cId: string) => {
+    setLocalComments(prev => ({
+      ...prev,
+      [msgId]: (prev[msgId] || []).filter(c => c.id !== cId)
+    }));
+  };
 
   // When the outline in the middle pane is clicked, jump to that email in single mode
   useEffect(() => {
@@ -474,21 +642,56 @@ export function ThreadPanel({
                     <p className="text-xs opacity-80 font-mono whitespace-pre-wrap">{diffError}</p>
                   </div>
                 ) : diffText ? (
-                  <div className="whitespace-pre-wrap">
-                    {diffText.split("\n").map((line, i) => renderEmailLine(line, i))}
+                  <div className="whitespace-pre-wrap pl-6">
+                    {diffText.split("\n").map((line, i) => (
+                      <EmailLine 
+                        key={i} 
+                        line={line} 
+                        idx={i} 
+                        msgId="diff" 
+                        threadId={thread.id} 
+                        comments={[]} 
+                        onCommentAdded={() => {}} 
+                        onCommentDeleted={() => {}} 
+                        readonly 
+                      />
+                    ))}
                   </div>
                 ) : null}
               </div>
             </div>
           ) : viewMode === "all" ? (
             emails.map((email, i) => (
-              <EmailViewer key={email.id || i} email={email} defaultExpanded={i === 0} />
+              <EmailViewer 
+                key={email.id || i} 
+                threadId={thread.id}
+                email={email} 
+                comments={localComments[email.id] || []}
+                onCommentAdded={(c) => handleAddComment(email.id, c)}
+                onCommentDeleted={(id) => handleDeleteComment(email.id, id)}
+                defaultExpanded={i === 0} 
+              />
             ))
           ) : currentEmail ? (
-            <EmailViewer email={currentEmail} defaultExpanded={true} />
+            <EmailViewer 
+              threadId={thread.id}
+              email={currentEmail} 
+              comments={localComments[currentEmail.id] || []}
+              onCommentAdded={(c) => handleAddComment(currentEmail.id, c)}
+              onCommentDeleted={(id) => handleDeleteComment(currentEmail.id, id)}
+              defaultExpanded={true} 
+            />
           ) : null}
         </div>
       </div>
+      {replyTargetId && (
+        <ReplyDialog
+          open={replyDialogOpen}
+          onOpenChange={setReplyDialogOpen}
+          thread={{ ...thread, comments: localComments }}
+          targetEmail={emails.find(e => e.id === replyTargetId)!}
+        />
+      )}
     </div>
   );
 }

@@ -10,6 +10,14 @@ export interface ThreadVersion {
   id: string;
 }
 
+export interface ThreadComment {
+  id: string;
+  line_index: number;
+  quoted_text: string;
+  comment: string;
+  timestamp: string;
+}
+
 export interface ThreadSummary {
   id: string;
   subject: string;
@@ -46,6 +54,7 @@ export interface Thread extends ThreadSummary {
   participants: string[];
   emails: EmailMessage[];
   mbox_path: string;
+  comments?: Record<string, ThreadComment[]>;
 }
 
 export interface Config {
@@ -100,6 +109,22 @@ export const api = {
 
   getThreadDiff: (threadId: string, v1: number, v2: number) =>
     request<{ diff: string }>(`/api/threads/${encodeURIComponent(threadId)}/diff?v1=${v1}&v2=${v2}`),
+
+  addComment: (threadId: string, msgId: string, lineIndex: number, quotedText: string, comment: string) =>
+    request<ThreadComment>(`/api/threads/${encodeURIComponent(threadId)}/comments`, {
+      method: "POST",
+      body: JSON.stringify({
+        msgid: msgId,
+        line_index: lineIndex,
+        quoted_text: quotedText,
+        comment,
+      }),
+    }),
+
+  deleteComment: (threadId: string, commentId: string) =>
+    request<{ status: string }>(`/api/threads/${encodeURIComponent(threadId)}/comments/${commentId}`, {
+      method: "DELETE",
+    }),
 
   summarize: (threadId: string, force = false) =>
     request<{ summary: string; cached: boolean }>("/api/summarize", {

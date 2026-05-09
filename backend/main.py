@@ -81,11 +81,12 @@ app.add_middleware(
 DATA_DIR = Path.home() / ".local" / "share" / "lore-mail-dashboard"
 CACHE_DIR = DATA_DIR / "cache"
 THREADS_DIR = DATA_DIR / "threads"
+COMMENTS_DIR = DATA_DIR / "comments"
 CONFIG_FILE = DATA_DIR / "config.json"
 SUMMARIES_FILE = DATA_DIR / "summaries.json"
 READ_STATE_FILE = DATA_DIR / "read-state.json"
 
-for d in [DATA_DIR, CACHE_DIR, THREADS_DIR]:
+for d in [DATA_DIR, CACHE_DIR, THREADS_DIR, COMMENTS_DIR]:
     d.mkdir(parents=True, exist_ok=True)
 
 # ---------------------------------------------------------------------------
@@ -151,6 +152,24 @@ def save_read_state(read_ids: set) -> None:
     with open(READ_STATE_FILE, "w") as f:
         json.dump(sorted(read_ids), f, indent=2)
 
+
+
+def load_comments(thread_id: str) -> dict:
+    safe_id = re.sub(r"[^\w@.\-]", "_", thread_id)
+    path = COMMENTS_DIR / f"{safe_id}.json"
+    if path.exists():
+        try:
+            with open(path) as f:
+                return json.load(f)
+        except Exception:
+            pass
+    return {}
+
+def save_comments(thread_id: str, comments: dict) -> None:
+    safe_id = re.sub(r"[^\w@.\-]", "_", thread_id)
+    path = COMMENTS_DIR / f"{safe_id}.json"
+    with open(path, "w") as f:
+        json.dump(comments, f, indent=2)
 
 # ---------------------------------------------------------------------------
 # b4 / lore helpers
@@ -661,6 +680,12 @@ def generate_summary(thread: dict, cfg: dict) -> str:
 # Pydantic models
 # ---------------------------------------------------------------------------
 
+class CommentCreate(BaseModel):
+    msgid: str
+    line_index: int
+    quoted_text: str
+    comment: str
+
 class ConfigUpdate(BaseModel):
     list_id: Optional[str] = None
     list_name: Optional[str] = None
@@ -908,6 +933,39 @@ def get_thread_diff(thread_id: str, v1: int, v2: int):
         logger.exception(f"b4 diff error for {thread_id}")
         raise HTTPException(status_code=500, detail=str(e))
 
+
+@app.post("/api/threads/{thread_id:path}/comments")
+def add_comment(thread_id: str, req: CommentCreate):
+    import uuid
+    comments_db = load_comments(thread_id)
+    msg_comments = comments_db.setdefault(req.msgid, [])
+    
+    new_comment = {
+        "id": str(uuid.uuid4()),
+        "line_index": req.line_index,
+        "quoted_text": req.quoted_text,
+        "comment": req.comment,
+        "timestamp": datetime.now(timezone.utc).isoformat()
+    }
+    msg_comments.append(new_comment)
+    save_comments(thread_id, comments_db)
+    return new_comment
+
+@app.delete("/api/threads/{thread_id:path}/comments/{comment_id}")
+def delete_comment(thread_id: str, comment_id: str):
+    comments_db = load_comments(thread_id)
+    found = False
+    for msgid, clist in comments_db.items():
+        new_list = [c for c in clist if c["id"] != comment_id]
+        if len(new_list) != len(clist):
+            comments_db[msgid] = new_list
+            found = True
+            break
+            
+    if found:
+        save_comments(thread_id, comments_db)
+    return {"status": "deleted"}
+
 @app.get("/api/threads/{thread_id:path}")
 def get_thread(thread_id: str):
     """
@@ -920,6 +978,7 @@ def get_thread(thread_id: str):
     # Attach summary if available
     summaries = load_summaries()
     thread["summary"] = summaries.get(thread_id)
+    thread["comments"] = load_comments(thread_id)
 
     return thread
 
