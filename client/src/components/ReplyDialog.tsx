@@ -20,18 +20,45 @@ export function ReplyDialog({ open, onOpenChange, thread, targetEmail }: ReplyDi
     if (open && thread.comments && thread.comments[targetEmail.id]) {
       const emailComments = [...thread.comments[targetEmail.id]].sort((a, b) => a.line_index - b.line_index);
       
-      let text = `On ${formatFullDate(targetEmail.date)}, ${targetEmail.from_name} wrote:
-`;
+      // Get the full body of the target email as an array of lines
+      const bodyLines = targetEmail.body.split("\n");
       
+      let text = `On ${formatFullDate(targetEmail.date)}, ${targetEmail.from_name} wrote:\n`;
+      
+      // Track the last line index we processed to know what context to skip or print
+      let lastProcessedIdx = -1;
+
       for (const c of emailComments) {
-        text += `> ${c.quoted_text}
-
-${c.comment}
-
-`;
+        // If there's a gap between the last processed line and this comment's line,
+        // we should show some context.
+        if (c.line_index > lastProcessedIdx + 1) {
+          // If the gap is large, we snip. Otherwise print it all.
+          if (c.line_index - lastProcessedIdx > 5) {
+             if (lastProcessedIdx !== -1) {
+               // Print 1 line of trailing context from previous comment
+               text += `> ${bodyLines[lastProcessedIdx + 1] || ""}\n`;
+             }
+             text += `> ...\n`;
+             // Print 1 line of leading context before current comment
+             text += `> ${bodyLines[c.line_index - 1] || ""}\n`;
+          } else {
+             // Gap is small, just print all the lines in between
+             for (let i = lastProcessedIdx + 1; i < c.line_index; i++) {
+               text += `> ${bodyLines[i] || ""}\n`;
+             }
+          }
+        }
+        
+        // Print the actual line the comment is on
+        text += `> ${bodyLines[c.line_index] || c.quoted_text}\n`;
+        
+        // Print the comment itself
+        text += `\n${c.comment}\n\n`;
+        
+        lastProcessedIdx = c.line_index;
       }
       
-      setReplyText(text.trim());
+      setReplyText(text.trim() + "\n");
       setCopied(false);
     }
   }, [open, thread, targetEmail]);
