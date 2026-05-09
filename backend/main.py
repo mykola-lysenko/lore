@@ -848,21 +848,33 @@ def list_threads(refresh: bool = False):
     cfg = load_config()
     cache_file = CACHE_DIR / f"threads_{cfg['list_id'].replace('.', '_')}.json"
 
+    def load_from_cache():
+        with open(cache_file) as f:
+            cached_threads = json.load(f)
+        summaries = load_summaries()
+        read_ids = load_read_state()
+        for t in cached_threads:
+            if t["id"] in summaries:
+                t["summary"] = summaries[t["id"]]
+                t["has_full_thread"] = True
+            t["is_read"] = t["id"] in read_ids
+        return {"threads": cached_threads, "cached": True, "count": len(cached_threads)}
+
     if not refresh and cache_file.exists():
         age = time.time() - cache_file.stat().st_mtime
         if age < 600:  # 10-minute cache — avoids re-fetching on every restart
-            with open(cache_file) as f:
-                threads = json.load(f)
-            # Merge in any saved summaries and read state
-            summaries = load_summaries()
-            read_ids = load_read_state()
-            for t in threads:
-                if t["id"] in summaries:
-                    t["summary"] = summaries[t["id"]]
-                t["is_read"] = t["id"] in read_ids
-            return {"threads": threads, "cached": True, "count": len(threads)}
+            return load_from_cache()
 
-    threads = fetch_thread_list(cfg)
+    try:
+        threads = fetch_thread_list(cfg)
+    except Exception as e:
+        # If lore.kernel.org rate limits us or goes down, fallback to stale cache if it exists!
+        if cache_file.exists():
+            logger.warning(f"b4 fetch failed ({e}), falling back to stale cache.")
+            result = load_from_cache()
+            result["error"] = "Lore is temporarily unavailable. Showing cached data."
+            return result
+        raise HTTPException(status_code=500, detail=f"Failed to fetch threads from lore: {e}")
 
     # Merge in saved summaries and read state
     summaries = load_summaries()
