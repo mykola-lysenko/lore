@@ -35,6 +35,7 @@ import {
   Search,
   Filter,
   Layers,
+  HelpCircle,
 } from "lucide-react";
 
 interface SidebarProps {
@@ -55,6 +56,7 @@ interface SidebarProps {
   loading: boolean;
   queueState: QueueState | null;
   onCancelQueue: () => void;
+  onShowShortcuts?: () => void;
 }
 
 const FILTER_TYPES = [
@@ -108,6 +110,7 @@ export function Sidebar({
   loading,
   queueState,
   onCancelQueue,
+  onShowShortcuts,
 }: SidebarProps) {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [localConfig, setLocalConfig] = useState<Partial<Config>>({});
@@ -479,7 +482,16 @@ export function Sidebar({
           </Collapsible>
 
           {/* Footer */}
-          <div className="mt-auto px-3 py-2">
+          <div className="mt-auto px-3 py-2 flex items-center justify-between">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-6 w-6 text-muted-foreground hover:text-foreground"
+              onClick={onShowShortcuts}
+              title="Keyboard Shortcuts (?)"
+            >
+              <HelpCircle className="w-3.5 h-3.5" />
+            </Button>
             <p className="text-[10px] text-muted-foreground">
               Powered by b4 + lore.kernel.org
             </p>

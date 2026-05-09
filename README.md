@@ -50,6 +50,20 @@ cd bpf-mail-dashboard
 pnpm dev
 ```
 
+
+## Keyboard Shortcuts
+
+| Key | Action |
+|---|---|
+| `j` | Select next thread |
+| `k` | Select previous thread |
+| `/` | Focus search bar |
+| `Enter` | Open selected thread / URL in search |
+| `s` | (Re)generate AI summary for selected thread |
+| `c` | Toggle Version Compare (if versions available) |
+| `Esc` | Clear search / Close thread panel |
+| `?` | Show this help |
+
 ## Configuration
 
 All settings are accessible from the **Settings** panel in the left sidebar:

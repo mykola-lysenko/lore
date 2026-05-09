@@ -1,3 +1,4 @@
+import { ShortcutsDialog } from "@/components/ShortcutsDialog";
 /*
  * Lore — Main Dashboard Page
  * Design: Dark Technical Dashboard (IDE-inspired)
@@ -38,6 +39,7 @@ export default function Dashboard() {
   const [searchQuery, setSearchQuery] = useState("");
   const [queueState, setQueueState] = useState<QueueState | null>(null);
   const [selectedEmailIndex, setSelectedEmailIndex] = useState<number | null>(null);
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
 
   // Track which thread IDs have already been enqueued this session
   const enqueuedRef = useRef<Set<string>>(new Set());
@@ -362,6 +364,11 @@ export default function Dashboard() {
       }
 
       switch (e.key) {
+        case "?": {
+          e.preventDefault();
+          setShortcutsOpen(true);
+          break;
+        }
         case "j": {
           e.preventDefault();
           if (filteredThreads.length === 0) return;
@@ -418,6 +425,7 @@ export default function Dashboard() {
 
   return (
     <div className="flex h-screen overflow-hidden bg-background text-foreground">
+      <ShortcutsDialog open={shortcutsOpen} onOpenChange={setShortcutsOpen} />
       {/* Left Sidebar — fixed width, not part of resizable group */}
       <Sidebar
         open={sidebarOpen}
@@ -443,6 +451,7 @@ export default function Dashboard() {
         loading={loadingThreads}
         queueState={queueState}
         onCancelQueue={handleCancelQueue}
+        onShowShortcuts={() => setShortcutsOpen(true)}
       />
 
       {/* Resizable main area: thread list + thread panel */}
