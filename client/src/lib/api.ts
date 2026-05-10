@@ -18,6 +18,12 @@ export interface ThreadComment {
   timestamp: string;
 }
 
+export interface LoreList {
+  id: string;
+  name: string;
+  url: string;
+}
+
 export interface ThreadSummary {
   id: string;
   subject: string;
@@ -167,4 +173,7 @@ export const api = {
 
   clearQueue: () =>
     request<{ cleared: number }>("/api/queue/clear", { method: "DELETE" }),
+
+  getLists: () =>
+    request<{ lists: LoreList[] }>("/api/lists"),
 };

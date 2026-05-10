@@ -3,8 +3,8 @@
  * Design: Dark IDE-inspired sidebar with settings, filters, and navigation
  */
 
-import { useState } from "react";
-import { type Config } from "@/lib/api";
+import { useState, useEffect } from "react";
+import { type Config, type LoreList, api } from "@/lib/api";
 import { type QueueState } from "@/pages/Dashboard";
 import { cn, getThreadTypeBadgeClass } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -115,6 +115,11 @@ export function Sidebar({
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [localConfig, setLocalConfig] = useState<Partial<Config>>({});
   const [dirty, setDirty] = useState(false);
+  const [knownLists, setKnownLists] = useState<LoreList[]>([]);
+
+  useEffect(() => {
+    api.getLists().then(res => setKnownLists(res.lists)).catch(() => {});
+  }, []);
 
   const updateLocal = (key: keyof Config, value: any) => {
     setLocalConfig((prev) => ({ ...prev, [key]: value }));
@@ -337,11 +342,19 @@ export function Sidebar({
                     List ID
                   </Label>
                   <Input
+                    list="lore-known-lists"
                     value={getVal("list_id") || ""}
                     onChange={(e) => updateLocal("list_id", e.target.value)}
                     placeholder="bpf.vger.kernel.org"
                     className="h-7 text-xs bg-input border-border font-mono"
                   />
+                  <datalist id="lore-known-lists">
+                    {knownLists.map(list => (
+                      <option key={list.id} value={list.id}>
+                        {list.name} ({list.id})
+                      </option>
+                    ))}
+                  </datalist>
                 </div>
 
                 {/* Days back */}
